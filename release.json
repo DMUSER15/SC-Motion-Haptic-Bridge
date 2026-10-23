@@ -1,0 +1,253 @@
+{
+ "date": "2026-10-23",
+ "files": {
+  ".gitattributes": {
+   "role": "doc",
+   "sha256": "29d317bf214a2356e59966d0fe68a4513556b714993ec694ffa02716964ef0e4"
+  },
+  ".gitignore": {
+   "role": "doc",
+   "sha256": "690c478e284b0a9638d008c09c553df29dc3fdeb1f93b6c239b6777ed817bd14"
+  },
+  "CHANGELOG.md": {
+   "role": "doc",
+   "sha256": "ce78dda0c0ede13c46cc11c33cde850e7ed4b2ee80f2023d54957dba90c0247c"
+  },
+  "LICENSE": {
+   "role": "doc",
+   "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  },
+  "README.md": {
+   "role": "doc",
+   "sha256": "a41ed53688601a9f64e6cef11b70578bdf07448281befe7f7da9596b427bebd6"
+  },
+  "config/README.md": {
+   "role": "doc",
+   "sha256": "232ea6095d756ef30d4e3e04e5c66ee66d21107041309c7ba53efc07ed020735"
+  },
+  "config/effects.json": {
+   "role": "user",
+   "sha256": "49810800fc585c13a3c3be75ac75d5eb897382c0f93a3c993de7eb87705bbcef"
+  },
+  "config/simhub/Star Citizen.simdef": {
+   "role": "simdef",
+   "sha256": "7e491e1ef1206bd47844db014ef85ab2c5ab1970f0b827b0369b0cf2caae36fa"
+  },
+  "docs/ARCHITECTURE.md": {
+   "role": "doc",
+   "sha256": "83a31e5c83f5cacd9f572557f1c4956e98c65c8a927fb6b2e1f8afaf36c16255"
+  },
+  "docs/INSTALL-LINUX.md": {
+   "role": "doc",
+   "sha256": "1ff7bba6364304016ead7b44f04fa0af8dbb5ec8bfb7f9f35801c3f0ddb0a19c"
+  },
+  "docs/INSTALL-WINDOWS.md": {
+   "role": "doc",
+   "sha256": "07bc24d03c5ac8c63ba03a02ad3a3a23ca696027a9882a2f995c4bff9d4bd1e0"
+  },
+  "docs/THANOS-LINUX.md": {
+   "role": "doc",
+   "sha256": "b30c5676940835545e5719ca850570014799814666ab2d8401ce13581321deee"
+  },
+  "docs/UPDATING.md": {
+   "role": "doc",
+   "sha256": "40c349aa1b97730c31edf1147487eace58d516e7b73e2c318969f68648dc0cde"
+  },
+  "docs/VERIFY.md": {
+   "role": "doc",
+   "sha256": "3eb5dde3caaf25a2f595124ee98155fe61ffc4e32a2dcca7819db8a07c961465"
+  },
+  "plugin/README.md": {
+   "role": "plugin",
+   "sha256": "edd1ad5a916ac433052c25de07e3021a62ee8f530a22bbf148d7f3d958049643"
+  },
+  "plugin/effects.default.json": {
+   "role": "plugin",
+   "sha256": "49810800fc585c13a3c3be75ac75d5eb897382c0f93a3c993de7eb87705bbcef"
+  },
+  "plugin/src/Effects.cs": {
+   "role": "plugin",
+   "sha256": "6ef1e229b1e2e7c8a170cfc3105f7c7e9ebda6a90ec4e1d12141d7ea7d542faf"
+  },
+  "plugin/src/MiniJson.cs": {
+   "role": "plugin",
+   "sha256": "52bbc577e9f576de6336ee98a84f996f8312d94b96963d529298aed3178c57c5"
+  },
+  "plugin/src/SCHaptics.cs": {
+   "role": "plugin",
+   "sha256": "06aceb24dfe40aca0353304b0a55225f1f950ebef41bdd2ea516e983b4827393"
+  },
+  "plugin/src/SCHaptics.csproj": {
+   "role": "plugin",
+   "sha256": "7773c30151037e4c23486ac0452233b25aadd52e8e83ea36112ffe77657560be"
+  },
+  "plugin/src/StatusPage.cs": {
+   "role": "plugin",
+   "sha256": "283ec8f78c73add2cd4e94b17a145e53b2feffcbfe1f3bca5c06fa445469fa73"
+  },
+  "scripts/README.md": {
+   "role": "runtime",
+   "sha256": "4f03c7a49affcb7b0018368be1d6cbf1a2f5794ed0077bcc580c432daad40a3d"
+  },
+  "scripts/SC_Motion_Server.py": {
+   "role": "motion",
+   "sha256": "3aa6b06dc611fada383dcfe45e92fb4ef13af3d7ac3caea5b8d9f3ee4c75ccad"
+  },
+  "scripts/lm_simhub3.py": {
+   "role": "motion",
+   "sha256": "96e0d35d63d1e6ac0079937b395b2608007470220a1243fa3efb646990f20036"
+  },
+  "scripts/lm_simhub3t.py": {
+   "role": "motion",
+   "sha256": "658fa256e33249e6096d204fb3e79e1d6b1316ecd4b00aaae2caf89eb78d3614"
+  },
+  "scripts/lm_simhub4.py": {
+   "role": "motion",
+   "sha256": "d24285b2cb39076e3641a4beb7f1b7cf687c69b8d692f680fc8cb0e09d1c34ea"
+  },
+  "scripts/lm_simhub4t.py": {
+   "role": "motion",
+   "sha256": "43433c20b340a13a9053b2706226bccb5bb4f5a784f137fe5e5016a44a9dc307"
+  },
+  "scripts/motion_desc.bin": {
+   "role": "motion",
+   "sha256": "3acd91cea423c76e5032bf4ca56907d772b187e9e9ee6f0e48e28bceeed31c4d"
+  },
+  "scripts/sc_certswap.py": {
+   "role": "runtime",
+   "sha256": "240b63fe084a614794987cb9bd31da2cacd2ce754e3ba4f9be58f6e2034bd7f3"
+  },
+  "scripts/sc_fx.py": {
+   "role": "motion",
+   "sha256": "87ea61353dfc236dbc224f449b3f4818721f0478807e39fe63a204d6f0e4a940"
+  },
+  "scripts/sc_haptics_install.py": {
+   "role": "runtime",
+   "sha256": "1cbdda4b9fe03e9a1fe02af3505c6b68fca0420eeb186f6e3378825812c74c63"
+  },
+  "scripts/sc_lmcert.py": {
+   "role": "runtime",
+   "sha256": "0218bd5eb72256cf3e035fb14907d12a72972a2d0d65d786f7ed518743552efc"
+  },
+  "scripts/sc_motion_clean.py": {
+   "role": "runtime",
+   "sha256": "03ae1797fb7349b310682c3249827a521c4769d081f1b9dbf408b2673d823a15"
+  },
+  "scripts/sc_start.py": {
+   "role": "runtime",
+   "sha256": "2709cd737f3ae2f188596051d029e2611d059a9f39af7abc4b85af0261ab6bfc"
+  },
+  "setup/common/scm_checks.py": {
+   "role": "setup",
+   "sha256": "4ddbdb275bd690c623bd08144f6f31e6eb486c6ae30acc72ed4dd44ede7fe511"
+  },
+  "setup/common/scm_common.py": {
+   "role": "setup",
+   "sha256": "7ec0b9919469cea11856889bc433a02c2d9c403293b402e6728ca2cc7efadb41"
+  },
+  "setup/common/scm_motion_hw.py": {
+   "role": "setup",
+   "sha256": "fa0511087af2241a748585699ed4aa2c7320481f5ac16cdff4ba56e63b3c9350"
+  },
+  "setup/common/scm_simdef.py": {
+   "role": "setup",
+   "sha256": "0ebc28feac49911b8df3b955d28e770273b5c910232b7fce10fab311b596eb4d"
+  },
+  "setup/common/scm_update.py": {
+   "role": "setup",
+   "sha256": "28a608ab333ae89e03ed7526e714a9df2650ce9ac06e64ab0179ca4f39e18015"
+  },
+  "setup/linux/dbox-wine/NetSecurity/NetSecurity.psd1": {
+   "role": "setup",
+   "sha256": "def8bf8bae345060e122a74bce1f878a642b2605265cf8f2874634d8e8bb601a"
+  },
+  "setup/linux/dbox-wine/NetSecurity/NetSecurity.psm1": {
+   "role": "setup",
+   "sha256": "253cba65fd8e91b87942978acba834a452d4d644025d195d256746602b638e34"
+  },
+  "setup/linux/dbox-wine/README.md": {
+   "role": "setup",
+   "sha256": "98fe55097da71aef0fde620e9f3e40259dc2e3d5c137f45b5009b0b3e55198cb"
+  },
+  "setup/linux/dbox-wine/sc_shim.c": {
+   "role": "setup",
+   "sha256": "7a1c54400a7c2f55248be8cb3f868d42e953b6188576f27676eb0efac48c5a84"
+  },
+  "setup/linux/dbox-wine/wmic.bat": {
+   "role": "setup",
+   "sha256": "5f291602f43a62b4c735c5a9d5a80a7924f33fb742dbfbaed2b513e7d7beeca7"
+  },
+  "setup/linux/sc_motion_guide.py": {
+   "role": "setup",
+   "sha256": "0b6cb401109d9e6745a4c67fbacc7d3a935bace0daa82915ea03354bd4671dd7"
+  },
+  "setup/linux/sc_motion_install.py": {
+   "role": "setup",
+   "sha256": "eb87b1e3abcc28c6ac8d2d87e1060afcd625c528f9fb68ec9e767a46a0736060"
+  },
+  "setup/linux/sc_motion_verify.py": {
+   "role": "setup",
+   "sha256": "bcc4b34d40a1c19323d00f4ee626883bf51744fc61be017865199e1086af8b57"
+  },
+  "setup/linux/scm_linux.py": {
+   "role": "setup",
+   "sha256": "7b1def426fc8cd4b0dcbe17f12b5bba3f0139e2ed49df576740701c83f1f97a5"
+  },
+  "setup/linux/scm_thanos_ext.py": {
+   "role": "setup",
+   "sha256": "22ee93d56a5ebf674b3cd869d4df4916df72a6b375cf38d503305d58ea2c8b31"
+  },
+  "setup/linux/scm_ui.py": {
+   "role": "setup",
+   "sha256": "f3416b1c0eba0e712ff110b880961bf70d36999cca5a59778ffd47e7830a8428"
+  },
+  "setup/windows/Install-SCMotion.ps1": {
+   "role": "setup",
+   "sha256": "5ae3e1cd8b961a069f8c276da57c57052ae08d9cac20d091ad0bac121c92a0cd"
+  },
+  "setup/windows/sc_cert_win.py": {
+   "role": "setup",
+   "sha256": "0b5b0a907fd4e52f4aee5db7c978aa38185514ad0c422a8f30f7dc0a9543021d"
+  },
+  "setup/windows/sc_install_win.py": {
+   "role": "setup",
+   "sha256": "d09169d3a8a4deb9dbdd8cf6334e75623b2170b3ede5317fd794abf158e20368"
+  },
+  "setup/windows/sc_start_win.py": {
+   "role": "setup",
+   "sha256": "8eefcccbd6a86169d92686b9737153547d356d2008de581456a2e1a6fa80e65d"
+  },
+  "setup/windows/sc_verify_win.py": {
+   "role": "setup",
+   "sha256": "7c8e44cd30aab7d2553bf3527c481ad083d9ffb81fb53f83706bfab80f8614af"
+  },
+  "setup/windows/winlocate.py": {
+   "role": "setup",
+   "sha256": "e244042b5ec3794fe15f1c83cb27d5bf396c8576fecbf43b84a590ac439d5240"
+  },
+  "setup/windows/winproc.py": {
+   "role": "setup",
+   "sha256": "2c473d977c91ac8f27d5870bbd1e113559b9584210e822b8a05cddeb50126587"
+  },
+  "tools/linkmap.json": {
+   "role": "setup",
+   "sha256": "c2c48ea70bc9147b8de74cc9a665813ea26f3c28fba59349755f88941ba353b5"
+  },
+  "tools/motion_schema.py": {
+   "role": "setup",
+   "sha256": "5ab8c0d75342067ffcd3acdeac834a02d4fc08969a1334e27640ce346354ce00"
+  },
+  "tools/repo_link.py": {
+   "role": "setup",
+   "sha256": "ac63999b42fe2b6578293c11d43eeff5ec36fe85c2a8357b6c601c196681106a"
+  },
+  "tools/scm_manifest.py": {
+   "role": "setup",
+   "sha256": "0425583569e512cdc9f6e9b4cb9f81979f9c2072ea343e5d3bafa4c4986d4b85"
+  }
+ },
+ "motion_values_changed": false,
+ "name": "SC-Motion-Haptic-Bridge",
+ "tag": "v0.1.0-alpha",
+ "version": "0.1.0-alpha"
+}

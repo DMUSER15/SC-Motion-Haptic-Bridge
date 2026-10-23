@@ -1,0 +1,24 @@
+{
+ "comment": "repo path -> home path; used by tools/repo_link.py",
+ "links": {
+  "config/effects.json": "~/sc_haptics/effects.json",
+  "plugin/effects.default.json": "~/sc_haptics/effects.default.json",
+  "plugin/src/Effects.cs": "~/sc_haptics/src/Effects.cs",
+  "plugin/src/MiniJson.cs": "~/sc_haptics/src/MiniJson.cs",
+  "plugin/src/SCHaptics.cs": "~/sc_haptics/src/SCHaptics.cs",
+  "plugin/src/SCHaptics.csproj": "~/sc_haptics/src/SCHaptics.csproj",
+  "plugin/src/StatusPage.cs": "~/sc_haptics/src/StatusPage.cs",
+  "scripts/SC_Motion_Server.py": "~/SC_Motion_Server.py",
+  "scripts/lm_simhub3.py": "~/lm_simhub3.py",
+  "scripts/lm_simhub3t.py": "~/lm_simhub3t.py",
+  "scripts/lm_simhub4.py": "~/lm_simhub4.py",
+  "scripts/lm_simhub4t.py": "~/lm_simhub4t.py",
+  "scripts/motion_desc.bin": "~/motion_desc.bin",
+  "scripts/sc_certswap.py": "~/sc_certswap.py",
+  "scripts/sc_fx.py": "~/sc_fx.py",
+  "scripts/sc_haptics_install.py": "~/sc_haptics_install.py",
+  "scripts/sc_lmcert.py": "~/sc_lmcert.py",
+  "scripts/sc_motion_clean.py": "~/sc_motion_clean.py",
+  "scripts/sc_start.py": "~/sc_start.py"
+ }
+}

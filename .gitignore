@@ -1,0 +1,44 @@
+# --- secrets and D-BOX's own files: never commit (see docs/PUBLISHING.md)
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.crt.orig
+livemotion.crt*
+desc_*.bin
+lm_certs/
+
+# --- binaries and build output
+*.dll
+*.exe
+*.pdb
+bin/
+obj/
+__pycache__/
+*.pyc
+
+# --- backups and local state
+*.bak
+*.bak.*
+*.orig
+*.sc_tmp
+*.scm_link
+*.scm_unlink
+sc_certswap_backup/
+sc_motion_link_backup/
+lm_capture/
+lm_msgs/
+lm_stream.log
+*.log
+
+# --- editors / OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- update check (setup/common/scm_update.py) staging folder
+.update-stage-*/

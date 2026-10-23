@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    SC Haptics - SimHub plugin for Star Citizen (stage 2: effects).
+    Build on Linux:  dotnet build ~/sc_haptics/src/SCHaptics.csproj -c Release
+    Output:          ~/sc_haptics/src/bin/Release/net48/SCHaptics.dll
+
+    Update resilience:
+      - References point at the SimHub DLLs installed in the Wine prefix and are
+        NOT copied (Private=false): SimHub always loads its own current versions.
+      - Only SimHub.Plugins / GameReaderCommon / SimHub.Logging (+ log4net, which
+        SimHub.Logging exposes) are referenced. Status page is plain WPF built in code (no XAML, no MahApps), no Newtonsoft.
+      - SimHub folder: default $(HOME)/linux-simracing-utils/pfx/drive_c/Program Files (x86)/SimHub
+        (the linux-simracing-utils layout); override with  -p:SimHubDir=/some/other/path
+        (the Windows installer always passes it)
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>SCHaptics</AssemblyName>
+    <RootNamespace>StarCitizenHaptics</RootNamespace>
+    <LangVersion>7.3</LangVersion>
+    <Version>0.3.1</Version>
+    <Deterministic>true</Deterministic>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SimHubDir Condition="'$(SimHubDir)' == ''">$(HOME)/linux-simracing-utils/pfx/drive_c/Program Files (x86)/SimHub</SimHubDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- .NET Framework 4.8 reference assemblies so net48 builds on Linux. Build-time only. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="SimHub.Plugins">
+      <HintPath>$(SimHubDir)/SimHub.Plugins.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GameReaderCommon">
+      <HintPath>$(SimHubDir)/GameReaderCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SimHub.Logging">
+      <HintPath>$(SimHubDir)/SimHub.Logging.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="log4net">
+      <HintPath>$(SimHubDir)/log4net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Framework assemblies SimHub.Plugins' public types may mention (resolved from the reference pack). -->
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+  </ItemGroup>
+</Project>

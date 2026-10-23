@@ -1,0 +1,3 @@
+# keep Windows batch files byte-for-byte (CRLF) so their sha256 stays the same
+*.bat -text
+*.shmotioncontroller -text
