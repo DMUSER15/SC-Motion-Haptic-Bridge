@@ -66,9 +66,9 @@ You do not need to tell the installer where they are. It looks in Windows' insta
 Star Citizen sends motion telemetry only through D-BOX's LiveMotion connector. You need D-BOX's free software for that connector; **no D-BOX hardware is needed**.
 
 1. Download **D-BOX HaptiSync Center** from [d-box.com/en/software-downloads](https://www.d-box.com/en/software-downloads) and install it normally.
-2. It must create `C:\ProgramData\D-BOX\Gaming\LiveMotion\LiveMotionConnector\`. The installer copies that folder to `…\LiveMotion\StarCitizen\` if HaptiSync Center has not done so already.
+2. It must create `C:\ProgramData\D-BOX\Gaming\LiveMotion\LiveMotionConnector\`.
 
-**Port 61666.** The capture server must own `127.0.0.1:61666`. On Windows, D-BOX's Motion Engine service **might** listen there. The installer (step 3) and the verifier name the program holding the port. Only if it is D-BOX's Motion Engine: open `services.msc`, find the D-BOX Motion Engine service, set its startup type to **Manual** and stop it. It is not needed for this pipeline.
+> **NOTE: Port 61666.** The capture server must own `127.0.0.1:61666`. If the capture server reports an error or says the port is in use, open `services.msc` and look for the **D-BOX Motion Engine** service. If it is running, it is holding the port: set its startup type to **Manual**, click **Stop**, then run the installer or the launcher again. This pipeline does not need that service. The installer (step 3) and the verifier name the program that holds the port.
 
 ## 5. SimHub and your motion hardware
 
@@ -88,6 +88,8 @@ powershell -ExecutionPolicy Bypass -File .\setup\windows\Install-SCMotion.ps1
 ```
 
 This first run is **read-only**. It shows every RSI Launcher, LIVE folder and SimHub it found, the dependencies D1–D5 and the steps 1–12. When it looks right:
+
+> **NOTE: TODO and BLOCKED lines are normal on this first run.** Steps that depend on an earlier step show **BLOCKED**, and steps that have not been done yet show **TODO**. They will not clear until you run the next command with `-Apply` in an **administrator** PowerShell.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\setup\windows\Install-SCMotion.ps1 -Apply
@@ -148,18 +150,26 @@ py -3 $env:USERPROFILE\sc-motion\sc_verify_win.py --live
 
 `--live` starts the capture server and bridge briefly without the game and checks the certificate the game will see, the packets SimHub will receive (against the registered game definition) and the copy for the haptics plugin. SimHub must be closed, so nothing can reach the platform. [VERIFY.md](VERIFY.md) explains every line.
 
+**What a good result looks like.** Each run ends with `RESULT: PASS` and `0 warn, 0 fail`, followed by the path of a report file in `%USERPROFILE%\lm_capture\verify`. The number of `pass` and `info` lines can differ from machine to machine.
+
+- **INFO lines are normal.** With nothing running you will see `game no, SimHub no, pipeline no`, and `motion hardware none` if you did not choose a platform in installer step 12.
+- **`--live` adds these checks, all PASS:** capture server listening on `127.0.0.1:61666`; TLS self-test (the server validates against the game's certificate); bridge listening on UDP 61700; bridge → SimHub packet answered (with the bundled game definition, 134-byte packets, motion values all zero because no game is running); and the copy for the plugin received byte for byte.
+- Any `WARN` or `FAIL`: see [VERIFY.md](VERIFY.md), fix it, and run again. If it will not clear, open an Issue and paste the full output.
+
 ## 9. Start
 
-Start menu → **Start StarCitizen - Motion Enabled**:
+Start the pipeline **from the Start menu**: open **Start → Start StarCitizen - Motion Enabled** (the shortcut installer step 11 created). It opens its own PowerShell window. Do not start it from another window, and leave that window open while you play.
+
+**Steps 1 to 6 below are the stages you will see running in that window**, in this order:
 
 1. update check ([UPDATING.md](UPDATING.md)): one line when you are up to date; a pause only when a newer release exists;
 2. certificate check, capture server, TLS self-test, bridge, zero-frame self-test;
 3. SimHub starts; the launcher warns if its game is not Star Citizen;
-4. **rig pause**: bring up your platform in its start order, check SimHub shows the controller connected, then press Enter;
+4. **rig pause**: bring up your platform in its start order, check SimHub shows the controller connected, then press Enter in that window;
 5. the RSI Launcher opens; start the game from it;
 6. thirty seconds after the game exits, the pipeline stops. The RSI Launcher and SimHub stay open.
 
-Stop leftovers after a crash: `py -3 $env:USERPROFILE\sc-motion\sc_start_win.py stop`
+> **NOTE: If the plugin or pipeline crashes** and leaves processes running, clear them with: `py -3 $env:USERPROFILE\sc-motion\sc_start_win.py stop`
 
 ## 10. First run with the platform
 
@@ -169,7 +179,7 @@ Follow this for the first run, and again after any update that warns that platfo
 2. **Motion power ON, still nobody in the rig.** Fly again; watch the platform.
 3. **Only then a person.**
 
-After a real session:
+**After the first session**, run this command in PowerShell and compare the output with the lines below to confirm the plugin is working. If the output does not match, submit an Issue report and paste in the PowerShell output.
 
 ```powershell
 py -3 $env:USERPROFILE\sc-motion\sc_verify_win.py --last-session
@@ -180,7 +190,14 @@ Expected PASS lines: `game connected (GetIdentification)`, `telemetry stream ope
 ## 11. Later
 
 - **Updates:** the launcher offers them ([UPDATING.md](UPDATING.md)). Keep the folder from section 2.
-- **After a Star Citizen or D-BOX update:** `py -3 $env:USERPROFILE\sc-motion\sc_cert_win.py lmcert check`. If a certificate copy was replaced, run `py -3 $env:USERPROFILE\sc-motion\sc_cert_win.py lmcert repair` (elevated, game closed; it puts your certificate back into every copy), then the verifier with `--live`.
+- **After a Star Citizen or D-BOX update (certificate):** a game or D-BOX update can replace your certificate with D-BOX's original in one or more copies of `livemotion.crt`. The launcher checks the certificate at every start (the "certificate check" line) and, on a FAIL, asks whether to abort or continue without motion. Repairing the certificate writes under `C:\ProgramData\D-BOX`, so it needs an administrator PowerShell; the launcher's normal window is not elevated. To repair it, close the game and run these in a PowerShell **as administrator** with your normal Windows account:
+
+  ```powershell
+  py -3 $env:USERPROFILE\sc-motion\sc_cert_win.py lmcert check
+  py -3 $env:USERPROFILE\sc-motion\sc_cert_win.py lmcert repair
+  ```
+
+  `repair` puts your certificate back into every copy, with backups. Then run the verifier with `--live` (section 8). The SC Haptics plugin does not touch certificates.
 - **Certificate tools:** `py -3 $env:USERPROFILE\sc-motion\sc_cert_win.py lmcert status`. All commands work: `check`, `selftest`, `repair`, `footprint all`, `new`, `activate`, `rollback` (run the writing ones elevated).
 - **Your effects:** `%USERPROFILE%\sc_haptics\effects.json`; the plugin reloads it within a second. To use another file, set the user environment variable `SC_HAPTICS_CONFIG` to its full path and restart SimHub.
 
