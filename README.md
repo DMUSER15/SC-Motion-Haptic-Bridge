@@ -1,5 +1,7 @@
 # SC-Motion-Haptic-Bridge
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/dmuser15)
+
 Star Citizen motion telemetry → SimHub → your motion platform and bass shakers, on **Linux** (CachyOS / Arch, Wine) and **Windows**.
 
 > **Alpha.** Linux is in daily use. Windows has been tested on stand-ins only, not yet on a real Windows PC. Expect rough edges and please report them.
@@ -73,6 +75,10 @@ You use this software at your own risk (see the licence: no warranty).
 | `tools/` | The link map and helpers used by the installers, and the schema generator. |
 | `docs/` | Install guides, updates, verification, architecture. |
 | `release.json` | This release's version and the sha256 of every file (used by the update check). |
+
+## Support
+
+This is a free, unofficial hobby project. If it is useful to you and you want to say thanks, you can [buy me a coffee](https://www.buymeacoffee.com/dmuser15). Entirely optional: everything here stays free and GPL-3.0, and support buys no warranty or priority.
 
 ## Licence
 

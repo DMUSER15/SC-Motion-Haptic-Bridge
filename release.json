@@ -5,13 +5,17 @@
    "role": "doc",
    "sha256": "29d317bf214a2356e59966d0fe68a4513556b714993ec694ffa02716964ef0e4"
   },
+  ".github/FUNDING.yml": {
+   "role": "doc",
+   "sha256": "52473ddee311456f01edac898ad8d1d0f136155bbedceabca743731c90f0c319"
+  },
   ".gitignore": {
    "role": "doc",
    "sha256": "690c478e284b0a9638d008c09c553df29dc3fdeb1f93b6c239b6777ed817bd14"
   },
   "CHANGELOG.md": {
    "role": "doc",
-   "sha256": "ce78dda0c0ede13c46cc11c33cde850e7ed4b2ee80f2023d54957dba90c0247c"
+   "sha256": "b62e4551154b7dd7c34d570eeb060799b55acb9070b05ab157dd30f7b742097d"
   },
   "LICENSE": {
    "role": "doc",
@@ -19,7 +23,7 @@
   },
   "README.md": {
    "role": "doc",
-   "sha256": "a41ed53688601a9f64e6cef11b70578bdf07448281befe7f7da9596b427bebd6"
+   "sha256": "728d966728c61088003d3092e1b385c9e5d6673d27155ccff9dc720870dbbf3d"
   },
   "config/README.md": {
    "role": "doc",

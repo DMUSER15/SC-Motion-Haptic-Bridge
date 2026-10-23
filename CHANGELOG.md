@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- README: optional Buy Me a Coffee link (badge and Support section); GitHub Sponsor button via `.github/FUNDING.yml`.
+
 ## 0.1.0-alpha
 
 First public alpha.
