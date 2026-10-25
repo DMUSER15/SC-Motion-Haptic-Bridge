@@ -1,5 +1,5 @@
 {
- "date": "2026-10-23",
+ "date": "2026-10-25",
  "files": {
   ".gitattributes": {
    "role": "doc",
@@ -15,7 +15,7 @@
   },
   "CHANGELOG.md": {
    "role": "doc",
-   "sha256": "b62e4551154b7dd7c34d570eeb060799b55acb9070b05ab157dd30f7b742097d"
+   "sha256": "e28a538127f9ba95b52b207312861d4fdc90d967fba051bcbd8999f212de48cf"
   },
   "LICENSE": {
    "role": "doc",
@@ -47,7 +47,7 @@
   },
   "docs/INSTALL-WINDOWS.md": {
    "role": "doc",
-   "sha256": "07bc24d03c5ac8c63ba03a02ad3a3a23ca696027a9882a2f995c4bff9d4bd1e0"
+   "sha256": "50781842cc2752c3155ed0c2f844b6930682197a46958da5d661c54ce83590f6"
   },
   "docs/THANOS-LINUX.md": {
    "role": "doc",
@@ -63,11 +63,15 @@
   },
   "plugin/README.md": {
    "role": "plugin",
-   "sha256": "edd1ad5a916ac433052c25de07e3021a62ee8f530a22bbf148d7f3d958049643"
+   "sha256": "ad46208ae063bcd334175afc3a8ecede116011eb6be64166c13b025f87d760cf"
   },
   "plugin/effects.default.json": {
    "role": "plugin",
-   "sha256": "49810800fc585c13a3c3be75ac75d5eb897382c0f93a3c993de7eb87705bbcef"
+   "sha256": "8391d3b9f1a660b4c4a079693224e8c385b1dedc464ef52e220c8a45682a2a82"
+  },
+  "plugin/src/ConfigEdit.cs": {
+   "role": "plugin",
+   "sha256": "c04e67b0b23bd1458945fb2fc43c0d987a8edbd29d4867826603e79a60a02c33"
   },
   "plugin/src/Effects.cs": {
    "role": "plugin",
@@ -79,15 +83,15 @@
   },
   "plugin/src/SCHaptics.cs": {
    "role": "plugin",
-   "sha256": "06aceb24dfe40aca0353304b0a55225f1f950ebef41bdd2ea516e983b4827393"
+   "sha256": "0d05e9134d2b9df8e665e9f144cc76d2a1248c88e11f36e063b14df7740cd10b"
   },
   "plugin/src/SCHaptics.csproj": {
    "role": "plugin",
-   "sha256": "7773c30151037e4c23486ac0452233b25aadd52e8e83ea36112ffe77657560be"
+   "sha256": "75d458ae04733c53298dd1521f6e22bb6817e608e401b5d52d7c930f4e53526c"
   },
   "plugin/src/StatusPage.cs": {
    "role": "plugin",
-   "sha256": "283ec8f78c73add2cd4e94b17a145e53b2feffcbfe1f3bca5c06fa445469fa73"
+   "sha256": "6b2499a783c1647850740b12f0024457492fca669482734d8c8c36eb72eabbcb"
   },
   "scripts/README.md": {
    "role": "runtime",
@@ -95,7 +99,7 @@
   },
   "scripts/SC_Motion_Server.py": {
    "role": "motion",
-   "sha256": "3aa6b06dc611fada383dcfe45e92fb4ef13af3d7ac3caea5b8d9f3ee4c75ccad"
+   "sha256": "fd78d517b3536ebd0530d741812e42892108ea98480b7d489dd4d99ef7f82375"
   },
   "scripts/lm_simhub3.py": {
    "role": "motion",
@@ -235,7 +239,7 @@
   },
   "tools/linkmap.json": {
    "role": "setup",
-   "sha256": "c2c48ea70bc9147b8de74cc9a665813ea26f3c28fba59349755f88941ba353b5"
+   "sha256": "2197d057901f86bd82a6d233883377b2c33bd8ab821eecf41fddc027e317c47d"
   },
   "tools/motion_schema.py": {
    "role": "setup",
@@ -252,6 +256,6 @@
  },
  "motion_values_changed": false,
  "name": "SC-Motion-Haptic-Bridge",
- "tag": "v0.1.0-alpha",
- "version": "0.1.0-alpha"
+ "tag": "v0.1.1-alpha",
+ "version": "0.1.1-alpha"
 }

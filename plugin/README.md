@@ -1,6 +1,6 @@
 # plugin/ — SC Haptics (SimHub plugin)
 
-- `src/`: C# source (`SCHaptics.cs`, `Effects.cs`, `StatusPage.cs`, `MiniJson.cs`, `SCHaptics.csproj`). On Linux, `~/sc_haptics/src/*` are symlinks to these files. Build output goes to `~/sc_haptics/src/bin`, outside the repository.
+- `src/`: C# source (`SCHaptics.cs`, `Effects.cs`, `StatusPage.cs`, `MiniJson.cs`, `ConfigEdit.cs`, `SCHaptics.csproj`). On Linux, `~/sc_haptics/src/*` are symlinks to these files. Build output goes to `~/sc_haptics/src/bin`, outside the repository.
 - `effects.default.json`: default effects. Your tuned live config is `config/effects.json`, linked to `~/sc_haptics/effects.json`; the plugin hot-reloads it within 1 s.
 
 Build and install on Linux (SimHub closed):
@@ -19,6 +19,16 @@ python3 ~/sc_haptics_install.py install
 3. `%USERPROFILE%\sc_haptics\effects.json` (Windows; the Windows installer puts it there).
 
 Of 2 and 3 the first file that exists wins.
+
+## Intensity sliders (0.4.0)
+
+The plugin's page in SimHub's left menu ("SC Haptics") starts with sliders: **MASTER** (scales every effect) and one per effect, 0..100 (0 = silent). They change only the numbers `master` and `gain` in `effects.json`; every other character of the file stays as it is, including the notes. A change is saved about half a second after you let go of the slider and is active at once. Effects switched off in `effects.json` show "(off in effects.json)"; their slider still works for when you switch them on.
+
+- The file is rewritten in place, so on Linux `~/sc_haptics/effects.json` stays a link to the repository's `config/effects.json`, and `git diff` shows your slider changes.
+- Before the first save of each SimHub session the unchanged file is copied to the `backup` folder next to `effects.json` (`effects.json.<date_time>`).
+- A save that would break the file (or an effect name it cannot find) is refused and shown on the page; the file is then unchanged.
+- Editing `effects.json` by hand still works; the sliders follow the file.
+- Bass shaker strength in SimHub's ShakeIt (effect gain, output volume) multiplies on top of these numbers.
 
 ## Outputs (0.3.0)
 

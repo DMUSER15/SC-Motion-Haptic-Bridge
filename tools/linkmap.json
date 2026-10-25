@@ -3,6 +3,7 @@
  "links": {
   "config/effects.json": "~/sc_haptics/effects.json",
   "plugin/effects.default.json": "~/sc_haptics/effects.default.json",
+  "plugin/src/ConfigEdit.cs": "~/sc_haptics/src/ConfigEdit.cs",
   "plugin/src/Effects.cs": "~/sc_haptics/src/Effects.cs",
   "plugin/src/MiniJson.cs": "~/sc_haptics/src/MiniJson.cs",
   "plugin/src/SCHaptics.cs": "~/sc_haptics/src/SCHaptics.cs",

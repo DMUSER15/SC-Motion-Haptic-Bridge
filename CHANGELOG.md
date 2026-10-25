@@ -1,8 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.1.1-alpha
 
 - README: optional Buy Me a Coffee link (badge and Support section); GitHub Sponsor button via `.github/FUNDING.yml`.
+- **SC Haptics plugin 0.4.0:** intensity sliders (master and one per effect) on the plugin's SimHub page; they change only those numbers in your `effects.json` and keep a backup of the first change of each session.
+- **New effect `turret_guns`:** shots from a remote turret station (no weapon event, only the shot flag) now reach the shakers while you sit at a turret. Added to `plugin/effects.default.json`; your own `effects.json` is never changed by an update (copy the entry from the default file if you want it).
+- **New effect `missile_hit` (testing):** a strong 0.5 s pulse on all shakers when an incoming missile hits you. It is based on one confirmed missile hit so far and is marked for further live testing; other missile impacts may not trigger it. Added to `plugin/effects.default.json` only.
+- **Capture server name:** it now identifies itself as `SC-Motion-Haptic-Bridge` to the game's connector (was "D-BOX Motion Engine"). Motion values are unchanged, but the file is part of the motion path, so the update shows the motion warning.
 
 ## 0.1.0-alpha
 

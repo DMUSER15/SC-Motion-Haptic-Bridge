@@ -77,7 +77,7 @@ def ident(req, ctx):
     print("GetIdentification:", text_format.MessageToString(req, as_one_line=True), flush=True)
     r = IdResp()
     r.server_id = "lm-sc-bridge"
-    r.server_name = "D-BOX Motion Engine"
+    r.server_name = "SC-Motion-Haptic-Bridge"
     r.server_version = "6.12.0"
     r.supported_client_types.append(2)
     r.single_client_mode = False

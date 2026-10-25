@@ -5,6 +5,9 @@
 //   SCHaptics.Motor1..8.Amp (0..100)                                -> ShakeIt Motors (0.3.0)
 //   SCHaptics.Fx.<name> (0..100), SCHaptics.Contact.HP, SCHaptics.Shock.Lin / .Rot,
 //   SCHaptics.Hit.*, SCHaptics.Heart.BPM, SCHaptics.Config.* and the stage-1 feed properties.
+// 0.4.0: intensity sliders on the left-menu page (master + one per effect) write the numbers
+// into effects.json in place (ConfigEdit.cs; a link stays a link, first write of a session
+// keeps a backup in <folder of effects.json>\backup) and reload it at once.
 // effects.json location (0.2.3): see SCHaptics.FindConfig (SC_HAPTICS_CONFIG, the Linux home
 // under Wine, %USERPROFILE%\sc_haptics on Windows, then the 0.2.2 path).
 // It only publishes properties. Nothing reaches the motion platform unless a SimHub
@@ -31,7 +34,7 @@ namespace StarCitizenHaptics
     [PluginName("SC Haptics")]
     public class SCHaptics : IPlugin, IDataPlugin, IWPFSettingsV2
     {
-        public const string Version = "0.3.1";
+        public const string Version = "0.4.0";
         public const int FeedPort = 61701;
         public const int NumEv = 20;           // ev 0..19 (telemetry schema)
         public const string ConfigEnv = "SC_HAPTICS_CONFIG";
@@ -221,6 +224,8 @@ namespace StarCitizenHaptics
         List<string> configErrors = new List<string>();
         readonly Stopwatch clock = Stopwatch.StartNew();
         readonly object lk = new object();
+        readonly object ioLock = new object();   // 0.4.0: effects.json read (CheckConfig) vs write (SetGain)
+        bool backedUp;                           // 0.4.0: backup made before the first write of this session
         volatile bool stopping;
         Thread thread;
         Socket sock;
@@ -260,6 +265,11 @@ namespace StarCitizenHaptics
         /// Loads effects.json when its modification time changes. A file with a JSON
         /// error is reported and the previous good config stays active.
         void CheckConfig()
+        {
+            lock (ioLock) CheckConfigLocked();
+        }
+
+        void CheckConfigLocked()
         {
             try
             {
@@ -481,6 +491,46 @@ namespace StarCitizenHaptics
         public double ShockLin { get { lock (lk) return Math.Round(engine.ShockLin, 1); } }
         public double ShockRot { get { lock (lk) return Math.Round(engine.ShockRot, 2); } }
         public double Master { get { lock (lk) return engine.Config.Master; } }
+
+        /// 0.4.0, for the sliders: master first (name ""), then every loaded effect:
+        /// (name, gain 0..100, enabled).
+        public List<Tuple<string, double, bool>> Gains()
+        {
+            lock (lk)
+            {
+                var r = new List<Tuple<string, double, bool>>();
+                r.Add(Tuple.Create("", engine.Config.Master, true));
+                foreach (FxDef d in engine.Config.Effects) r.Add(Tuple.Create(d.Name, d.Gain, d.Enabled));
+                return r;
+            }
+        }
+
+        /// 0.4.0: writes master (effect "" or null) or one effect's gain into effects.json and
+        /// reloads it at once. Never throws; returns the text for the status page. A refused or
+        /// failed write leaves the file as it was.
+        public string SetGain(string effect, double value)
+        {
+            string msg;
+            try
+            {
+                lock (ioLock)
+                {
+                    string dir = Path.GetDirectoryName(configPath);
+                    string bdir = Path.Combine(string.IsNullOrEmpty(dir) ? "." : dir, "backup");
+                    msg = ConfigEdit.WriteGain(configPath, effect, value, bdir, ref backedUp);
+                }
+            }
+            catch (Exception e)
+            {
+                msg = "NOT saved (" + (string.IsNullOrEmpty(effect) ? "master" : effect) + "): " + e.Message;
+                SimHub.Logging.Current.Info("SC Haptics: " + msg);
+                return msg;
+            }
+            lock (lk) configStamp = DateTime.MinValue;   // reload even if the file time did not move
+            CheckConfig();
+            SimHub.Logging.Current.Info("SC Haptics: " + msg);
+            return msg;
+        }
 
         public long HitCount { get { lock (lk) return hitCount; } }
         public int HitKind { get { lock (lk) return hitKind; } }
