@@ -4,7 +4,7 @@
 
 Star Citizen motion telemetry → SimHub → your motion platform and bass shakers, on **Linux** (CachyOS / Arch, Wine) and **Windows**.
 
-> **Alpha.** Linux is in daily use. Windows has been tested on stand-ins only, not yet on a real Windows PC. Expect rough edges and please report them.
+> **Alpha.** Linux is in daily use. Windows has been tested as working, but requires more testers. Please log issues as found.
 
 The pipeline ends at SimHub, so **any motion platform SimHub supports works**; you connect and tune it in SimHub as usual. Nothing here depends on one manufacturer.
 
@@ -43,6 +43,8 @@ The launcher checks GitHub for a newer release each time it starts. When you are
 ## Tuning is yours
 
 The bridge sends the game's values **unshaped**. Every value that reaches your platform (axes, intensity, smoothing, limits, motion scaling, crash protection, Motion haptics gains) is set by you in SimHub, for your platform. Start low.
+
+Vibration effects now have per-effect sliders as well as an overall Master slider for gain on all effects.
 
 ## Safety
 
