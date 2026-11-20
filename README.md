@@ -2,6 +2,10 @@
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/dmuser15)
 
+****Version 0.2.0 on a test branch****
+Added a full GUI and a bunch of fixes. Keeping 0.11 until Windows update version is tested as working and will commit it to Main branch. Should update automatically upon launch, or install release over 0.11 release folder
+
+
 Star Citizen motion telemetry → SimHub → your motion platform and bass shakers, on **Linux** (CachyOS / Arch, Wine) and **Windows**.
 
 > **Alpha.** Linux is in daily use. Windows has been tested as working, but requires more testers. Please log issues as found.
