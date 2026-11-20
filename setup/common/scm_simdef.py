@@ -49,8 +49,10 @@ def inspect(path, scripts_dir):
             rev = json.load(fh).get("ManagerVersion")
     except (OSError, ValueError):
         rev = None
-    return True, "%d fields, signature 0x%08X%s" % (len(sd["fields"]), sd["tele_sig"],
-                                                    (", data conversion revision %s" % rev) if rev else "")
+    note = v4.unfilled_note(sd) if hasattr(v4, "unfilled_note") else ""
+    return True, "%d fields, signature 0x%08X%s%s" % (len(sd["fields"]), sd["tele_sig"],
+                                                      (", data conversion revision %s" % rev) if rev else "",
+                                                      ("; " + note) if note else "")
 
 
 def win_to_local(win_path, drive_c=None):

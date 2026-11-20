@@ -52,7 +52,7 @@ What each package is for:
 
 - `python-grpcio` and `python-protobuf`: the capture server.
 - `openssl`: the certificate tools.
-- `espeak-ng` (optional): spoken prompts from the launcher.
+- `espeak-ng` (optional): spoken steps of the probe recorder only (`docs/PROBES.md`); the launcher never speaks.
 - `dotnet-sdk`: builds the SC Haptics plugin (net48; `dotnet-sdk` 10 builds it on CachyOS). Without it, motion works and the shakers stay silent.
 
 ---
@@ -199,7 +199,7 @@ Then the install steps (**DONE**, **TODO** = apply will do it, **BLOCKED** = nee
 | 3 | dbox-original | `~/livemotion.crt.orig` = D-BOX's original (sha256 `6f5b4b7a…97ad`) |
 | 4 | cert-pair | creates `~/lm.crt` + `~/lm.key` **only if both are missing** (RSA 4096, CN/SAN LiveMotionComm, CA:TRUE, 10 years) |
 | 5 | scripts | links only the files needed to run into your home folder: `sc_start.py`, `SC_Motion_Server.py` with its `motion_desc.bin`, the bridge `lm_simhub4t.py` with `lm_simhub4.py`, `lm_simhub3.py`, `sc_fx.py` (and `lm_simhub3t.py`, the 9-field bridge), `sc_lmcert.py`, `sc_certswap.py`, `sc_haptics_install.py`, `sc_motion_clean.py`, the plugin source and `effects.json` |
-| 6 | footprint | `sc_lmcert.py footprint all`: your certificate in every copy, backups first |
+| 6 | footprint | `sc_lmcert.py repair`: creates missing copies (and connector files from the vault), then your certificate in every copy, backups first |
 | 7 | simdef | installs and registers the game definition "Star Citizen" in SimHub (section 5); keeps a usable one that is already registered; SimHub closed |
 | 8 | plugin | `dotnet build` + `sc_haptics_install.py install` (SimHub closed) |
 | 9 | menu | writes the menu entries "Start StarCitizen - Motion Enabled" and "Star Citizen - Remove Motion Setup" |
@@ -254,11 +254,12 @@ Expected PASS lines: `game connected (GetIdentification)`, `telemetry stream ope
 
 ## 8. Daily use, updates, game patches, certificate renewal
 
-- **Play:** app menu → **Start StarCitizen - Motion Enabled**. It checks for updates (one line when up to date; a pause only when a newer release exists, see [UPDATING.md](UPDATING.md)), starts and self-tests the pipeline, starts SimHub, then pauses for the rig (the checklist is printed): bring the platform up, then press Enter. Thirty seconds after the game exits, the launcher and Wine in the game prefix are closed and the pipeline stops. SimHub stays open.
+- **Play:** app menu → **Start StarCitizen - Motion Enabled**. It checks for updates (one line when up to date; a pause only when a newer release exists, see [UPDATING.md](UPDATING.md)), starts and self-tests the pipeline, starts SimHub, then starts the RSI Launcher (no pause: the game sends no motion before you are spawned, so bring the rig up while it loads; `env SC_START_PAUSE=1 python3 ~/sc_start.py` brings the Enter pause back). The launcher stays open after the game; when you close it, the pipeline stops. SimHub stays open.
 - **Clean up after a crash:** `python3 ~/sc_start.py stop`
+- **Leftover Wine (a launcher, Gamescope or SimHub that will not close):** `python3 ~/sc_start.py cleanup` (`game`, `simhub` or `all`; lists what it found and asks first; `--yes` answers yes; switch the motion power OFF before closing SimHub unless your rig parks by itself). Nothing closes Wine by itself: after the game the RSI Launcher stays open until you close it.
 - **After a Star Citizen or D-BOX update:**
   1. Run `python3 ~/sc_lmcert.py check`.
-  2. If a copy is not `~/lm.crt` any more, the update replaced it. The launcher asks at start-up: **[r]epair** puts your certificate back (backups first). By hand, with the game closed: `python3 ~/sc_lmcert.py repair`.
+  2. If a copy is not `~/lm.crt` any more, the update replaced it. The launcher asks at start-up: **[r]epair** puts your certificate back, also into a copy the update deleted (backups first). By hand, with the game closed: `python3 ~/sc_lmcert.py repair`.
   3. Run the verifier with `--live`.
 - **Certificate renewal** (the pair is valid 10 years; `check` warns within 30 days). With the game closed and the capture server stopped: `python3 ~/sc_lmcert.py new`, then `python3 ~/sc_lmcert.py activate`; if anything goes wrong, `python3 ~/sc_lmcert.py rollback`.
 
@@ -281,6 +282,9 @@ Everything moved goes to `~/sc_motion_clean_backup/<time>/` with a `manifest.jso
 | Symptom | Check |
 |---|---|
 | `certificate check FAILED` at start | answer **r** (repair), or `python3 ~/sc_lmcert.py status` and `python3 ~/sc_lmcert.py repair` with the game closed |
+| installer plan shows `6 footprint TODO` after an update | the line names each copy the connector reads (`custom`, `D-BOX original`, `missing`); `python3 setup/linux/sc_motion_install.py apply` (or `python3 ~/sc_lmcert.py repair`) restores them |
+| `connector folder missing` after a LUG-Helper reinstall | `python3 ~/sc_lmcert.py repair` rebuilds it from the vault (saved automatically after the first successful repair; `python3 ~/sc_lmcert.py vault status`) |
+| something failed and you want the details | `python3 ~/scm_errlog.py list`, then `python3 ~/scm_errlog.py show 1`: a plain-English log of each run that had an error or a crash (the 5 newest; your home folder is written as `~`, so you can share it as it is) |
 | `game connected` FAIL in `--last-session` | did the game load the connector? `LiveMotionConnector.log` in the LIVE folder; the verifier's `dbox` lines |
 | `pipeline ports free` FAIL | the verifier names the process holding the port: another bridge, a recorder, or D-BOX's Motion Engine on 61666 |
 | SimHub shows "Waiting for data" | select "Star Citizen" in SimHub's game list |

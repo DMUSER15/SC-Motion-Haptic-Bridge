@@ -3,6 +3,8 @@
 // Objects -> Dictionary<string, object>, arrays -> List<object>, numbers -> double,
 // strings -> string, true/false -> bool, null -> null.
 // Also accepts Python's non-standard NaN / Infinity / -Infinity (json.dumps default).
+// Nesting is limited to MaxDepth levels: a deeply nested datagram on the plugin's UDP port would
+// otherwise overflow the stack, which .NET cannot catch (it would end SimHub).
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -12,10 +14,14 @@ namespace StarCitizenHaptics
 {
     public static class MiniJson
     {
+        public const int MaxDepth = 64;
+        [ThreadStatic] static int depth;
+
         public static object Parse(string s)
         {
             if (s == null) throw new FormatException("null input");
             int i = 0;
+            depth = 0;
             object v = Value(s, ref i);
             Ws(s, ref i);
             if (i != s.Length) throw new FormatException("trailing data at " + i);
@@ -37,8 +43,12 @@ namespace StarCitizenHaptics
             Ws(s, ref i);
             if (i >= s.Length) throw new FormatException("unexpected end");
             char c = s[i];
-            if (c == '{') return Obj(s, ref i);
-            if (c == '[') return Arr(s, ref i);
+            if (c == '{' || c == '[')
+            {
+                if (++depth > MaxDepth) throw new FormatException("nesting deeper than " + MaxDepth + " at " + i);
+                try { return c == '{' ? (object)Obj(s, ref i) : Arr(s, ref i); }
+                finally { depth--; }
+            }
             if (c == '"') return Str(s, ref i);
             if (Lit(s, ref i, "true")) return true;
             if (Lit(s, ref i, "false")) return false;

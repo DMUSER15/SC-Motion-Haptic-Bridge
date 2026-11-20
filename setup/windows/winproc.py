@@ -14,7 +14,7 @@ Windows data comes from PowerShell (Get-CimInstance Win32_Process) and `netstat 
 On Linux (tests only) the same functions read /proc, so the Windows launcher and verifier can
 be exercised against stand-ins.
 """
-import json, os, re, subprocess
+import json, os, re, subprocess, sys
 
 IS_WIN = os.name == "nt"
 NO_WINDOW = 0x08000000 if IS_WIN else 0  # CREATE_NO_WINDOW
@@ -34,20 +34,19 @@ def split_cmdline(s):
     return [a or b for a, b in re.findall(r'"([^"]*)"|(\S+)', s or "")]
 
 
-def _base(arg):
-    return arg.replace("\\", "/").rsplit("/", 1)[-1].strip().lower()
+def _proc_module():
+    """setup/common/scm_proc.py: next to this file once installed, in the repository otherwise."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for d in (here, os.path.join(os.path.dirname(here), "common")):
+        if os.path.isfile(os.path.join(d, "scm_proc.py")) and d not in sys.path:
+            sys.path.append(d)
+    import scm_proc
+    return scm_proc
 
 
-def program(argv):
-    """Same rule as sc_start._program: the exe, or for python [-opts] script.py the script."""
-    if not argv:
-        return ""
-    first = _base(argv[0])
-    if first.startswith(("python", "py.exe", "pythonw")) or first in ("py",):
-        for a in argv[1:]:
-            if not a.startswith("-"):
-                return _base(a)
-    return first
+_PR = _proc_module()
+_base = _PR.base
+program = _PR.program     # the one rule: the exe, or for python [-opts] script.py the script
 
 
 def processes():

@@ -197,7 +197,9 @@ Expected PASS lines: `game connected (GetIdentification)`, `telemetry stream ope
   py -3 $env:USERPROFILE\sc-motion\sc_cert_win.py lmcert repair
   ```
 
-  `repair` puts your certificate back into every copy, with backups. Then run the verifier with `--live` (section 8). The SC Haptics plugin does not touch certificates.
+  `repair` puts your certificate back into every copy, with backups. It also creates a copy the update deleted (the connector folder is still there but its `livemotion.crt` is gone). Then run the verifier with `--live` (section 8). The SC Haptics plugin does not touch certificates. If the launcher offers **[r]epair** in a normal (not elevated) window, it answers "no permission" and prints the command to run as administrator.
+- **Installer shows `7 footprint TODO` after an update:** the plan line names each copy the connector reads, for example `LiveMotionConnector missing, StarCitizen custom`. Run the installer's apply in an administrator PowerShell (or `lmcert repair` as above); it creates the missing copy, and the plan shows `7 footprint DONE`. A D-BOX update may also add new folders under `LiveMotion` (for example with empty `dbxLive*.dll` files). Leave them alone; the bridge does not use them.
+- **Error logs:** a run that had an error or a crash leaves a plain-English log in `%LOCALAPPDATA%\sc-motion\logs` (the 5 newest). `py -3 $env:USERPROFILE\sc-motion\scm_errlog.py list`, then `... show 1`. Your user folder is written as `~`, so a log can be shared as it is.
 - **Certificate tools:** `py -3 $env:USERPROFILE\sc-motion\sc_cert_win.py lmcert status`. All commands work: `check`, `selftest`, `repair`, `footprint all`, `new`, `activate`, `rollback` (run the writing ones elevated).
 - **Your effects:** `%USERPROFILE%\sc_haptics\effects.json`; the plugin reloads it within a second. To use another file, set the user environment variable `SC_HAPTICS_CONFIG` to its full path and restart SimHub.
 

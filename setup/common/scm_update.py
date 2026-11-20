@@ -38,6 +38,15 @@ Kinds of install
   files the installer's step 6 copies). Without a saved repository folder it can only tell
   you to download the release and run Install-SCMotion.ps1 -Apply.
 
+Going back (rollback)
+  python3 ~/sc_start.py rollback      (Windows: py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py rollback)
+  undoes the newest update: every replaced file comes back from its backup folder, files that
+  were new in the update are moved out (nothing is deleted: they go into a new backup folder
+  <new>_back_to_<old>_<time>), and the same follow-up steps run as after an update (links,
+  game definition, plugin). A git clone is moved back to the older release tag. Running it
+  again undoes the rollback. Updates can be undone one after the other, newest first. A
+  developer checkout is not handled: use git there (tags mark each state).
+
 Environment
   SC_UPDATE_CHECK=0        no check at all
   SC_UPDATE_REPO           owner/name on GitHub (default DMUSER15/SC-Motion-Haptic-Bridge)
@@ -591,3 +600,234 @@ def _apply(loc, root, home, tag, remote, changes, platform, install_dir, simhub_
             "starts; fix them when convenient (the verifier shows what is missing).")
         _hold(True, say)
     return True
+
+
+# ----------------------------------------------------------------------------- rollback
+BACKUP_FOLDER = "sc_motion_update_backup"
+
+
+def list_backups(home):
+    """Backup folders with a usable manifest, newest first: [(folder path, manifest)]."""
+    base = os.path.join(home, BACKUP_FOLDER)
+    out = []
+    try:
+        names = os.listdir(base)
+    except OSError:
+        return out
+    for n in names:
+        d = os.path.join(base, n)
+        try:
+            with open(os.path.join(d, "manifest.json"), encoding="utf-8") as f:
+                m = json.load(f)
+        except (OSError, ValueError):
+            continue
+        files = m.get("files") if isinstance(m, dict) else None
+        if not isinstance(files, list) or not all(isinstance(x, dict) and safe_path(x.get("path")) for x in files):
+            continue
+        if parse_version(m.get("from")) is None or parse_version(m.get("to")) is None or not isinstance(m.get("time"), str):
+            continue
+        out.append((d, m))
+    out.sort(key=lambda x: (_backup_order(x[1]), x[0]), reverse=True)
+    return out
+
+
+def _backup_order(m):
+    """When a backup was made, as a number: "order" (written by rollbacks) or its time stamp."""
+    if isinstance(m.get("order"), (int, float)) and not isinstance(m.get("order"), bool):
+        return float(m["order"])
+    try:
+        return time.mktime(time.strptime(m["time"], "%Y%m%d_%H%M%S"))
+    except (ValueError, OverflowError):
+        return 0.0
+
+
+def pick_rollback(home, version):
+    """The backup that undoes the newest update of the installed version. -> (folder, manifest) or
+    (None, reason)."""
+    backs = list_backups(home)
+    if not backs:
+        return None, "no update backups in %s (nothing was updated on this computer yet)" % os.path.join(home, BACKUP_FOLDER)
+    for d, m in backs:
+        if m.get("rolled_back"):
+            continue
+        if parse_version(m["to"]) == parse_version(version):
+            return d, m
+        return None, ("the newest backup (%s) is for %s -> %s, but %s is installed; nothing to undo" % (
+            os.path.basename(d), m["from"], m["to"], version))
+    return None, "every backup was already rolled back"
+
+
+def _git_tag(root, version):
+    for cand in (version, "v" + version.lstrip("v"), version.lstrip("v")):
+        rc, _ = run(["git", "-C", root, "rev-parse", "-q", "--verify", "refs/tags/" + cand])
+        if rc == 0:
+            return cand
+    return None
+
+
+def _unlink_home_links(root, home, paths):
+    """Remove home-folder links that point at files which are being moved out (Linux)."""
+    try:
+        with open(os.path.join(root, "tools", "linkmap.json"), encoding="utf-8") as f:
+            links = json.load(f).get("links", {})
+    except (OSError, ValueError, AttributeError):
+        return 0
+    n = 0
+    for p in paths:
+        dest = links.get(p)
+        if not isinstance(dest, str) or not dest.startswith("~/"):
+            continue
+        lp = os.path.join(home, *dest[2:].split("/"))
+        if os.path.islink(lp) and os.path.realpath(lp) == os.path.realpath(local_path(root, p)):
+            os.remove(lp)
+            n += 1
+    return n
+
+
+def rollback(platform, repo, home, say, game_running, simhub_running, install_dir=None, simhub_dir=None,
+             interactive=None):
+    """Undo the newest update. -> exit code: 0 done, 1 nothing to do or not confirmed, 2 failed."""
+    tty = sys.stdin.isatty() if interactive is None else interactive
+    loc = find_local(repo, install_dir)
+    if loc["kind"] == "developer":
+        say("rollback: %s. The launcher does not manage a developer checkout; use git "
+            "(git tag lists the saved states, git checkout <tag> goes back to one)." % loc["detail"])
+        return 1
+    if loc["kind"] in ("unknown", "norepo") or not loc["root"]:
+        say("rollback: %s; the repository folder is needed to go back" % loc["detail"])
+        return 1
+    root, mine = loc["root"], loc["version"]
+    bdir, man = pick_rollback(home, mine)
+    if bdir is None:
+        say("rollback: " + man)
+        return 1
+    old = man["from"]
+    files = [x for x in man["files"] if x.get("role") != "user" and x["path"] not in PROTECTED]
+    restore = [x for x in files if x.get("kind") in ("changed", "removed")]
+    move_out = [x for x in files if x.get("kind") == "new"]
+    is_git = man.get("kind") == "git-public" and loc["kind"] == "git-public"
+    if man.get("kind") != loc["kind"]:
+        say("rollback: the backup was made for a %s install, this is a %s install; not going back" % (man.get("kind"), loc["kind"]))
+        return 1
+    missing = [x["path"] for x in restore if not os.path.isfile(local_path(bdir, x["path"]))]
+    if missing and not is_git:
+        say("rollback: the backup %s is incomplete (missing %s); nothing was changed" % (bdir, ", ".join(missing[:5])))
+        return 2
+    tag = None
+    if is_git:
+        tag = _git_tag(root, old)
+        if not shutil.which("git") or tag is None:
+            say("rollback: git or the release tag for %s was not found in %s; nothing was changed" % (old, root))
+            return 2
+    say("ROLLBACK: SC-Motion-Haptic-Bridge %s -> %s (undoes the update of %s)" % (mine, old, man["time"]))
+    print("  files that go back to their %s version:" % old)
+    for x in restore:
+        print("    restore  %-8s %s" % (x.get("role") or "-", x["path"]))
+    for x in move_out:
+        print("    move out %-8s %s  (was new in %s; kept in the backup folder)" % (x.get("role") or "-", x["path"], man["to"]))
+    if not files:
+        print("    none (only the version record changes)")
+    print("  never touched: your effects.json, SimHub's settings and profiles, your certificates, your saved locations.")
+    motion = [x["path"] for x in files if x.get("role") in MOTION_ROLES]
+    needs_closed = [x["path"] for x in files if x.get("role") == "simdef" or x["path"].startswith("plugin/src/")]
+    if motion:
+        motion_banner(print, motion, mine, old)
+    if game_running():
+        say("Star Citizen is running: roll back after the game")
+        return 1
+    if needs_closed and simhub_running():
+        say("SimHub is running. The plugin and the game definition can only be replaced while SimHub is "
+            "closed. Close SimHub, then run the rollback again.")
+        return 1
+    if not tty:
+        say("no terminal: nothing was changed. Run the rollback from a terminal to confirm it.")
+        return 1
+    if _ask("  [r]oll back now, or [q]uit? (r/q, Enter = quit): ", "rq", "q") != "r":
+        say("rollback not applied")
+        return 1
+    if motion:
+        try:
+            yes = input("  Type YES to confirm you will check your SimHub motion settings before riding: ").strip()
+        except EOFError:
+            yes = ""
+        if yes.upper() != "YES":
+            say("not confirmed; rollback not applied")
+            return 1
+    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    undo = os.path.join(home, BACKUP_FOLDER, "%s_back_to_%s_%s" % (mine, old, stamp))
+    n = 1
+    while os.path.exists(undo):
+        n += 1
+        undo = os.path.join(home, BACKUP_FOLDER, "%s_back_to_%s_%s-%d" % (mine, old, stamp, n))
+    os.makedirs(undo)
+    done = []
+
+    def keep(p):
+        src = local_path(root, p)
+        if os.path.isfile(src):
+            dst = local_path(undo, p)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+            return True
+        return False
+
+    try:
+        for x in files:
+            keep(x["path"])
+        if os.path.isfile(os.path.join(root, MANIFEST)):
+            shutil.copy2(os.path.join(root, MANIFEST), os.path.join(undo, MANIFEST))
+        if platform != "windows":
+            _unlink_home_links(root, home, [x["path"] for x in move_out])
+        if is_git:
+            rc, out = run(["git", "-C", root, "reset", "--keep", "refs/tags/" + tag])
+            if rc:
+                say("rollback: git could not go back to %s (local changes to a file the update changed?): %s. "
+                    "Nothing was changed." % (tag, out[-400:]))
+                shutil.rmtree(undo, ignore_errors=True)
+                return 2
+        else:
+            for x in restore:
+                dst = local_path(root, x["path"])
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                tmp = dst + ".rollback-tmp"
+                shutil.copy2(local_path(bdir, x["path"]), tmp)
+                os.replace(tmp, dst)
+            for x in move_out:
+                dst = local_path(root, x["path"])
+                if os.path.isfile(dst):
+                    os.remove(dst)            # its copy is in the undo folder
+            if os.path.isfile(os.path.join(bdir, MANIFEST)):
+                shutil.copy2(os.path.join(bdir, MANIFEST), os.path.join(root, MANIFEST))
+        for x in files:
+            kind = {"changed": "changed", "removed": "new", "new": "removed"}.get(x.get("kind"), "changed")
+            done.append({"path": x["path"], "role": x.get("role", ""), "kind": kind})
+        with open(os.path.join(undo, "manifest.json"), "w", encoding="utf-8") as f:
+            json.dump({"from": mine, "to": old, "time": stamp, "order": max(time.time(), _backup_order(man) + 1e-3),
+                       "kind": loc["kind"], "rollback_of": os.path.basename(bdir),
+                       "files": done}, f, indent=1)
+            f.write("\n")
+        man["rolled_back"] = stamp
+        with open(os.path.join(bdir, "manifest.json"), "w", encoding="utf-8") as f:
+            json.dump(man, f, indent=1)
+            f.write("\n")
+    except OSError as e:
+        say("rollback stopped by an error (%s). Files already restored stay restored; the versions before "
+            "the rollback are in %s. Run the rollback again after fixing the cause." % (e, undo))
+        return 2
+    say("%d file(s) back at %s; the %s versions are in %s" % (len(restore), old, mine, undo))
+    changes = [(x["path"], x.get("role", ""), "changed") for x in files]
+    if platform == "windows":
+        steps = post_windows(root, home, changes, install_dir, simhub_dir, say)
+        if install_dir and os.path.isfile(os.path.join(root, MANIFEST)):
+            shutil.copyfile(os.path.join(root, MANIFEST), os.path.join(install_dir, MANIFEST))
+    else:
+        steps = post_linux(root, home, changes, say)
+    failed = False
+    for ok, txt in steps:
+        say(("  done: " if ok else "  NOT DONE: ") + txt)
+        failed = failed or not ok
+    if failed:
+        say("the files are back, but the step(s) marked NOT DONE above need you (the verifier shows what is missing)")
+    say("rolled back to %s. The next start will offer the update to %s again: answer s to skip it. "
+        "Running the rollback again undoes this rollback." % (old, man["to"]))
+    return 0

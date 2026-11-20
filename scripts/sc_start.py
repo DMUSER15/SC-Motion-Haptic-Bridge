@@ -37,12 +37,12 @@ Order:
      Warn (not stop) if the SC Haptics plugin DLL is not installed in SimHub.
   6b. Warn (not stop) if SimHub's log says its active game is not Star Citizen: SimHub then
      waits for that other game's data ("Waiting for data") and nothing reaches the rig.
-  7. Wait for Enter while you bring the rig up (see RIG_PAUSE).
+  7. Off by default since 2026-11-18 (see RIG_PAUSE): wait for Enter while you bring the rig up.
   8. Start the game with LUG-Helper's sc-launch.sh, unchanged.
-  9. Keep the bridge and capture server running while the game runs. When StarCitizen.exe exits,
-     wait AUTO_CLOSE_AFTER_GAME seconds (spoken warning), then close the RSI Launcher and Wine in
-     the game prefix with LUG-Helper's 'wineserver -k', then stop the bridge and capture server.
-     SimHub is left running; close it yourself.
+  9. Keep the bridge and capture server running while the game and the RSI Launcher run. Nothing
+     is closed for you (2026-11-18): when you close the launcher, the bridge and capture server
+     stop. SimHub is left running; close it yourself. Wine left over from the game or SimHub:
+     python3 ~/sc_start.py cleanup (see WINE CLEAN-UP below).
 
 If the game is already running (for example the bridge crashed), steps 6-8 skip what is
 already up and the script just restarts the capture server and bridge and keeps watching.
@@ -50,6 +50,10 @@ already up and the script just restarts the capture server and bridge and keeps 
     python3 ~/sc_start.py stop
 closes the launcher and Wine in the game prefix (refuses while StarCitizen.exe runs) and stops
 any capture server and bridge. SimHub is left running.
+    python3 ~/sc_start.py cleanup [game|simhub|all] [--yes] [--rig-off]
+ends Wine left over in the game prefix (RSI Launcher, Gamescope, Wine helpers) and/or SimHub's
+prefix (SimHub itself too). Lists what it found and asks first; --yes answers yes
+(--rig-off is the older name of --yes).
 
 Logs: ~/lm_capture/launch/ (capture server and bridge logs rotate at 5 MB).
 """
@@ -58,7 +62,6 @@ import re
 import logging
 import logging.handlers
 import os
-import shutil
 import signal
 import socket
 import struct
@@ -67,9 +70,32 @@ import sys
 import threading
 import time
 
+try:  # error and crash logs (scm_errlog.py next to this file; optional: an older install runs without it)
+    sys.path.insert(0, os.path.dirname(os.path.realpath(os.path.abspath(__file__))))
+    import scm_errlog as EL
+except Exception:  # noqa: BLE001
+    EL = None
+
 HOME = os.path.expanduser("~")
 # The repository this launcher belongs to (~/sc_start.py is a symlink to <repo>/scripts/sc_start.py).
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+
+def _shared(name):
+    """A shared module of the kit (setup/common): next to this file in a Windows install folder,
+    in the repository otherwise."""
+    here = os.path.dirname(os.path.realpath(os.path.abspath(__file__)))
+    for d in (here, os.path.join(REPO_DIR, "setup", "common")):
+        if os.path.isfile(os.path.join(d, name + ".py")):
+            if d not in sys.path:
+                sys.path.append(d)
+            return __import__(name)
+    sys.exit("sc_start: %s.py not found next to this launcher or in %s. The installation is incomplete: "
+             "run the installer's apply (or update) again." % (name, os.path.join(REPO_DIR, "setup", "common")))
+
+
+PORTS = _shared("scm_ports")   # the one port table
+PROC = _shared("scm_proc")     # the one process-matching rule
 
 
 def saved_setting(key):
@@ -109,11 +135,12 @@ HAPTICS_DLL = os.path.join(SIMHUB_DIR, "SCHaptics.dll")
 # sc_lmcert.py (with sc_certswap.py next to it) checks the LiveMotion TLS certificate: 'check'
 # before anything starts, 'selftest' once the capture server listens. Both are read-only.
 # On FAIL the script asks: abort, or continue with a warning that motion may be disabled; for
-# 'check' also: repair = sc_lmcert.py repair (puts ~/lm.crt back into every livemotion.crt copy,
+# 'check' also: repair = sc_lmcert.py repair (recreates missing copies, puts ~/lm.crt back into every livemotion.crt copy,
 # backups first; refuses while the game runs), then check again.
 # SC_START_CERT_ON_FAIL=abort|continue|repair answers that question without a prompt (needed when
 # there is no terminal; without a terminal and without this setting a FAIL aborts).
 LMCERT_SCRIPT = os.path.join(HOME, "sc_lmcert.py")
+CERT_TOOL_CMD = "python3 ~/sc_lmcert.py"   # how the messages name the certificate tool (Windows sets its own)
 CERT_ON_FAIL = os.environ.get("SC_START_CERT_ON_FAIL", "ask").lower()
 
 # The LUG-Helper prefix: env SC_GAME_PREFIX, else the installer's saved choice, else LUG-Helper's
@@ -129,26 +156,35 @@ LOG_DIR = os.path.join(HOME, "lm_capture", "launch")
 # power (cabinet) OFF before SimHub starts, SimHub connects to the controller, then the cabinet is
 # switched ON; reset the connection if SimHub shows "Actuator is unpowered"). Wording made
 # vendor-neutral 2026-10-19 (kit 1.2). The script waits for Enter at that point.
-# We may want to disable this later, once the rig start-up procedure changes or is automated:
-# set RIG_PAUSE = False and the script carries straight on to the game.
-RIG_PAUSE = True
+# 2026-11-18: off by default. Opening the RSI Launcher is safe for the rig: the game sends no
+# motion before you are spawned, so there is time to bring the rig up while the launcher and the
+# game load. To wait for Enter before the launcher starts: env SC_START_PAUSE=1 (or set
+# RIG_PAUSE = True here). With the pause on, the launcher needs a terminal.
+RIG_PAUSE = os.environ.get("SC_START_PAUSE") == "1"
 # Test-only override, so the script can be exercised without a terminal. Not for normal use.
 if os.environ.get("SC_START_NO_PAUSE") == "1":
     RIG_PAUSE = False
 
-# AUTO CLOSE (2026-10-17)
-# Closing Star Citizen leaves the RSI Launcher (tray) and Wine helpers running, so gamescope
-# never exits. After StarCitizen.exe has been seen and then exits, the script waits this many
-# seconds (spoken warning; starting the game again cancels it) and then shuts down the game
-# prefix with LUG-Helper's own 'wineserver -k' (the same command sc-launch.sh runs at every
-# start). It is never run while StarCitizen.exe is running, and only affects the game prefix,
-# never SimHub's. Set to None to keep the launcher open after the game exits; you can still
-# close everything with:  python3 ~/sc_start.py stop
-AUTO_CLOSE_AFTER_GAME = 30
+# WINE CLEAN-UP (2026-11-18; replaces AUTO CLOSE of 2026-10-17)
+# Nothing closes Wine by itself any more: the 30 s auto-close after the game and sc_gs_exit.sh's
+# watcher are gone (they also closed the game's crash messages before anyone could read them).
+# Leftovers are ended on request: python3 ~/sc_start.py cleanup [game|simhub|all], the control
+# window's "Clean up Wine" button, or its option to clean up when the window closes.
+#   game   = every process of this user whose WINEPREFIX is the game prefix (RSI Launcher, Wine
+#            helpers, sc-launch.sh) and Gamescope started for the launcher. Refused while
+#            StarCitizen.exe runs.
+#   simhub = SimHub (asked to close first) and every process whose WINEPREFIX is SimHub's prefix,
+#            a stuck SimHubWPF.exe included. Asked separately (a rig without a standby park:
+#            switch the motion power OFF first).
+# Order: SimHub's own close (wine taskkill, up to 15 s) -> the prefix's 'wineserver -k' -> up to
+# 5 s -> SIGKILL whatever is left. Shells with that WINEPREFIX (sc-launch.sh shell) are listed
+# but never ended.
+WINE_PARTS = ("game", "simhub")
+WINE_KEEP = ("bash", "sh", "dash", "zsh", "fish")
 
-CAPTURE_PORT_TCP = 61666
-BRIDGE_PORT_UDP = 61700
-SIMHUB_PORT_UDP = 30777
+CAPTURE_PORT_TCP = PORTS.CAPTURE_TCP
+BRIDGE_PORT_UDP = PORTS.TEE_UDP      # the tee listens here; the bridge behind it on PORTS.BRIDGE_UDP
+SIMHUB_PORT_UDP = PORTS.SIMHUB_UDP
 
 # Lower-case program names used to recognise processes.
 GAME_EXE = "starcitizen.exe"
@@ -186,8 +222,10 @@ def bridge_layout():
         return None, None, str(e)
     except Exception as e:
         return None, None, "cannot load lm_simhub4 (%s)" % e
+    note = lm_simhub4.unfilled_note(sd) if hasattr(lm_simhub4, "unfilled_note") else ""
     return (struct.Struct(sd["fmt"]), sd["tele_sig"],
-            "%s: %d fields, %d bytes, signature 0x%08X" % (path, len(sd["fields"]), struct.calcsize(sd["fmt"]), sd["tele_sig"]))
+            "%s: %d fields, %d bytes, signature 0x%08X%s" % (path, len(sd["fields"]), struct.calcsize(sd["fmt"]), sd["tele_sig"],
+                                                           ("; " + note) if note else ""))
 
 
 def simhub_active_game(log=None):
@@ -205,51 +243,58 @@ def simhub_active_game(log=None):
     return hits[-1] if hits else None
 
 # ----------------------------------------------------------------------------- helpers
-ESPEAK = shutil.which("espeak-ng")
-
-
-def say(text, speak=False):
+def say(text, speak=False):  # noqa: ARG001  speak: kept for callers; nothing is spoken (2026-11-18)
     print(time.strftime("%H:%M:%S"), text, flush=True)
-    if speak and ESPEAK:
-        subprocess.Popen([ESPEAK, "-s", "165", text],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def _base(arg):
-    return arg.replace("\\", "/").rsplit("/", 1)[-1].lower()
-
-
-def _program(argv):
-    """The program a process is running: the exe itself (Wine shows the Windows .exe as the
-    first argument), or for 'python3 [-opts] script.py' the script. An editor or shell that
-    only mentions a name does not count."""
-    first = _base(argv[0])
-    if first.startswith("python"):
-        for a in argv[1:]:
-            if not a.startswith("-"):
-                return _base(a)
-        return first
-    return first
+_base = PROC.base
+_program = PROC.program
 
 
 def scan(*needles):
-    """Running processes whose program is one of needles: [(pid, cmdline)]."""
-    me = os.getpid()
-    hits = []
-    for d in os.listdir("/proc"):
-        if not d.isdigit() or int(d) == me:
-            continue
-        try:
-            with open("/proc/%s/cmdline" % d, "rb") as f:
-                raw = f.read()
-        except OSError:
-            continue
-        argv = [a.decode("utf-8", "replace") for a in raw.split(b"\0") if a]
-        if not argv:
-            continue
-        if _program(argv) in needles:
-            hits.append((int(d), " ".join(argv)))
-    return hits
+    """Running processes whose program is one of needles: [(pid, cmdline)] (rule: scm_proc.py)."""
+    return PROC.scan(*needles)
+
+
+def simhub_state():
+    """-> ("none" | "running" | "stuck", [pids]). "stuck": a SimHubWPF.exe process whose Wine
+    server is gone; it has no window and does nothing, but it used to count as "running" and
+    the launcher then never started SimHub. The Windows launcher replaces this."""
+    return PROC.wine_state(SIMHUB_NEEDLE)
+
+
+def clear_stuck_simhub(pids):
+    """Ask, then end stuck SimHub processes. -> True when none is left."""
+    say("WARNING: SimHub is in the process list (pid %s) but its Wine server is gone: it is stuck, "
+        "has no window and cannot be used." % ", ".join(str(p) for p in pids))
+    if not sys.stdin.isatty():
+        fail("a stuck SimHub process is in the way and there is no terminal to ask; end it "
+             "(cabinet OFF): kill %s" % " ".join(str(p) for p in pids))
+    say("Rig check first: motion cabinet OFF, nobody in the rig.")
+    try:
+        ans = input("End the stuck SimHub process and start SimHub fresh? [y]es / [q]uit: ").strip().lower()
+    except EOFError:
+        ans = "q"
+    if ans not in ("y", "yes"):
+        fail("stopped at your request (stuck SimHub process left as it is)")
+    for pid in pids:
+        for sig, wait in ((signal.SIGTERM, 5.0), (signal.SIGKILL, 2.0)):
+            try:
+                os.kill(pid, sig)
+            except ProcessLookupError:
+                break
+            except PermissionError:
+                fail("no permission to end pid %d" % pid)
+            end = time.monotonic() + wait
+            while time.monotonic() < end and os.path.exists("/proc/%d" % pid):
+                time.sleep(0.2)
+            if not os.path.exists("/proc/%d" % pid):
+                break
+    state, left = simhub_state()
+    if state != "none":
+        fail("could not end the stuck SimHub process (pid %s)" % ", ".join(str(p) for p in left))
+    say("stuck SimHub process ended")
+    return True
 
 
 def listening(proto, port):
@@ -340,7 +385,10 @@ def start_logged(cmd, name, logname, **kw):
 
     def pump():
         for line in iter(proc.stdout.readline, b""):
-            lg.info(line.decode("utf-8", "replace").rstrip())
+            text = line.decode("utf-8", "replace").rstrip()
+            lg.info(text)
+            if EL is not None:
+                EL.child_line(name, text)
         h.flush()
 
     threading.Thread(target=pump, daemon=True).start()
@@ -352,13 +400,17 @@ def wait_for(check, proc, name, logpath, timeout):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if proc.poll() is not None:
-            print(tail(logpath))
-            fail("%s exited during start-up (code %s); log above" % (name, proc.returncode))
+            t = tail(logpath)
+            print(t)
+            fail("%s exited during start-up (code %s); log above: %s" % (name, proc.returncode, logpath),
+                 trace="last lines of %s:\n%s" % (logpath, t))
         if check():
             return
         time.sleep(0.25)
-    print(tail(logpath))
-    fail("%s did not become ready within %d s; log above" % (name, timeout))
+    t = tail(logpath)
+    print(t)
+    fail("%s did not become ready within %d s; log above: %s" % (name, timeout, logpath),
+         trace="last lines of %s:\n%s" % (logpath, t))
 
 
 def selftest(expect_zero):
@@ -428,36 +480,186 @@ def gamescope_for_launcher():
     return out
 
 
-def close_game_prefix(reason):
-    """Shut down the game prefix (launcher + Wine helpers). Refuses while the game runs."""
-    if scan(GAME_EXE):
-        say("not closing: StarCitizen.exe is still running")
-        return False
-    wbin = game_wine_bin()
-    if not wbin or not os.path.exists(os.path.join(wbin, "wineserver")):
-        say("cannot close the launcher: Wine runner not found in %s" % SC_LAUNCH)
-        return False
-    say("closing the RSI Launcher and Wine in the game prefix (%s)" % reason, speak=True)
-    env = dict(os.environ, WINEPREFIX=GAME_PREFIX)
+def _norm_path(p):
     try:
-        subprocess.run([os.path.join(wbin, "wineserver"), "-k"], env=env, timeout=30,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.TimeoutExpired:
-        say("WARNING: wineserver -k did not finish within 30 s")
-    end = time.monotonic() + 15
-    while time.monotonic() < end and (scan(*GAME_NEEDLES) or gamescope_for_launcher()):
-        time.sleep(0.5)
-    for pid in gamescope_for_launcher():
-        say("stopping leftover gamescope (pid %d)" % pid)
-        stop_pid(pid, "gamescope")
-    left = scan(*GAME_NEEDLES)
-    if left:
-        for pid, cmd in left:
-            print("  still running: pid %d %s" % (pid, cmd))
-        say("WARNING: some launcher processes are still running (listed above)")
+        return os.path.realpath(p.rstrip("/") or "/")
+    except (OSError, ValueError):
+        return p
+
+
+def _ancestors():
+    """This process and its parents (never ended, even if started with that WINEPREFIX)."""
+    out, pid = set(), os.getpid()
+    while pid > 1 and pid not in out:
+        out.add(pid)
+        try:
+            with open("/proc/%d/stat" % pid) as f:
+                pid = int(f.read().rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    return out
+
+
+def _proc_text(pid, name):
+    try:
+        with open("/proc/%d/%s" % (pid, name), "rb") as f:
+            return f.read().replace(b"\0", b" ").decode("utf-8", "replace").strip()
+    except OSError:
+        return ""
+
+
+def prefix_processes(prefix):
+    """[(pid, name, cmdline)] of this user whose environment has WINEPREFIX=prefix."""
+    want, uid, skip, out = _norm_path(prefix), os.getuid(), _ancestors(), []
+    for d in os.listdir("/proc"):
+        if not d.isdigit() or int(d) in skip:
+            continue
+        try:
+            if os.stat("/proc/" + d).st_uid != uid:
+                continue
+            with open("/proc/%s/environ" % d, "rb") as f:
+                env = f.read()
+        except OSError:
+            continue
+        i = env.find(b"WINEPREFIX=")
+        if i < 0 or (i > 0 and env[i - 1:i] != b"\0"):
+            continue
+        val = env[i + 11:env.find(b"\0", i) if env.find(b"\0", i) > 0 else len(env)].decode("utf-8", "replace")
+        if _norm_path(val) == want:
+            pid = int(d)
+            out.append((pid, _proc_text(pid, "comm"), _proc_text(pid, "cmdline")[:200]))
+    return out
+
+
+def wine_leftovers(which):
+    """What a clean-up of "game" or "simhub" would end. -> {"end": [(pid, name, cmd)],
+    "keep": [...], "blocked": reason or None, "simhub": "none"|"running"|"stuck" (simhub only)}."""
+    prefix = GAME_PREFIX if which == "game" else SIMHUB_PREFIX
+    if not os.path.isdir(os.path.join(prefix, "drive_c")):
+        # a wrong setting (your home, "/") must never select every Wine program you run
+        return {"end": [], "keep": [], "blocked": "%s is not a Wine prefix (no drive_c)" % prefix,
+                "simhub": "none"}
+    procs = prefix_processes(prefix)
+    seen = {p for p, _, _ in procs}
+    info = {"blocked": None}
+    if which == "game":
+        extra = gamescope_for_launcher()
+        if scan(GAME_EXE):
+            info["blocked"] = "Star Citizen is running"
+    else:
+        state, extra = simhub_state()
+        info["simhub"] = state
+    for pid in extra:
+        if pid not in seen and pid not in _ancestors():
+            procs.append((pid, _proc_text(pid, "comm"), _proc_text(pid, "cmdline")[:200]))
+    keep = [p for p in procs if p[1] in WINE_KEEP and "sc-launch.sh" not in p[2] and "sc_gs_exit" not in p[2]]
+    info["end"] = sorted(p for p in procs if p not in keep)
+    info["keep"] = sorted(keep)
+    return info
+
+
+def _alive(pid):
+    return os.path.exists("/proc/%d" % pid) and not _gone(pid)
+
+
+def wine_cleanup(which):
+    """End what wine_leftovers(which) lists (see WINE CLEAN-UP). -> True when nothing is left.
+    The caller has asked (and, for SimHub, had the motion power switched off)."""
+    label = "game prefix" if which == "game" else "SimHub's prefix"
+    info = wine_leftovers(which)
+    if info["blocked"]:
+        say("Wine clean-up of the %s not done: %s" % (label, info["blocked"]))
         return False
-    say("game prefix closed")
+    if not info["end"]:
+        say("Wine clean-up of the %s: nothing left over" % label)
+        return True
+    prefix = GAME_PREFIX if which == "game" else SIMHUB_PREFIX
+    env = dict(os.environ, WINEPREFIX=prefix)
+    wbin = game_wine_bin() if which == "game" else os.path.dirname(SIMHUB_WINE)
+    say("Wine clean-up of the %s: %d process(es)" % (label, len(info["end"])))
+    if which == "simhub" and info.get("simhub") == "running":
+        say("asking SimHub to close")
+        try:
+            subprocess.run([SIMHUB_WINE, "taskkill", "/IM", "SimHubWPF.exe"], env=env, timeout=20,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        end = time.monotonic() + 15
+        while time.monotonic() < end and simhub_state()[0] != "none":
+            time.sleep(0.5)
+    server = os.path.join(wbin, "wineserver") if wbin else None
+    if server and os.path.exists(server):
+        try:
+            subprocess.run([server, "-k"], env=env, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.TimeoutExpired):
+            say("wineserver -k did not finish; ending the processes directly")
+    else:
+        say("Wine runner of the %s not found; ending the processes directly" % label)
+    end = time.monotonic() + 5
+    while time.monotonic() < end and any(_alive(p) for p, _, _ in wine_leftovers(which)["end"]):
+        time.sleep(0.5)
+    left = wine_leftovers(which)
+    if left["blocked"]:
+        say("Wine clean-up of the %s stopped: %s" % (label, left["blocked"]))
+        return False
+    for pid, name, _ in left["end"]:
+        say("ending %s (pid %d)" % (name or "process", pid))
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+    end = time.monotonic() + 3
+    while time.monotonic() < end and wine_leftovers(which)["end"]:
+        time.sleep(0.3)
+    final = wine_leftovers(which)["end"]
+    if final:
+        for pid, name, cmd in final:
+            print("  still running: pid %d %s %s" % (pid, name, cmd))
+        say("WARNING: Wine clean-up of the %s left %d process(es) (listed above)" % (label, len(final)))
+        return False
+    say("Wine clean-up of the %s: done" % label)
     return True
+
+
+def cmd_cleanup(args):
+    """python3 ~/sc_start.py cleanup [game|simhub|all] [--yes] [--rig-off]"""
+    flags = {a for a in args if a.startswith("--")}
+    words = [a for a in args if not a.startswith("--")] or ["all"]
+    if len(words) != 1 or words[0] not in ("game", "simhub", "all") or flags - {"--yes", "--rig-off"}:
+        sys.exit("usage: python3 ~/sc_start.py cleanup [game|simhub|all] [--yes] [--rig-off]")
+    tty = sys.stdin.isatty()
+    rc = 0
+    for which in (WINE_PARTS if words[0] == "all" else (words[0],)):
+        label = "game prefix" if which == "game" else "SimHub's prefix"
+        info = wine_leftovers(which)
+        print("%s: %d to end, %d shell(s) kept%s" % (label, len(info["end"]), len(info["keep"]),
+                                                    ("; " + info["blocked"]) if info["blocked"] else ""))
+        for pid, name, cmd in info["end"]:
+            print("  pid %-7d %-16s %s" % (pid, name, cmd[:90]))
+        if info["blocked"]:
+            rc = 1
+            continue
+        if not info["end"]:
+            continue
+        if which == "simhub" and info.get("simhub") in ("running", "stuck") and not flags & {"--yes", "--rig-off"}:
+            if not tty:
+                say("SimHub is not closed without a terminal (add --yes)")
+                rc = 1
+                continue
+            ans = input("Close SimHub? (It drives the motion rig: unless your rig parks by itself, switch the "
+                        "motion power OFF first.) [y/N] ")
+            if ans.strip().lower() not in ("y", "yes"):
+                continue
+        elif "--yes" not in flags and "--rig-off" not in flags:
+            if not tty:
+                say("not ended without a terminal (add --yes)")
+                rc = 1
+                continue
+            if input("End these %d process(es)? [y/N] " % len(info["end"])).strip().lower() not in ("y", "yes"):
+                continue
+        if not wine_cleanup(which):
+            rc = 1
+    return rc
 
 
 def cmd_stop():
@@ -467,13 +669,16 @@ def cmd_stop():
     if scan(GAME_EXE):
         fail("Star Citizen is still running. Exit the game first, then run stop again.")
     if scan(*GAME_NEEDLES) or gamescope_for_launcher():
-        close_game_prefix("stop command")
+        wine_cleanup("game")
     else:
         say("RSI Launcher is not running")
     for needles, name in ((BRIDGE_NEEDLES, "bridge"), (CAPTURE_NEEDLES, "capture server")):
         for pid, cmd in scan(*needles):
             say("stopping %s (pid %d)" % (name, pid))
             stop_pid(pid, name)
+    for pid, name in addon_leftovers():
+        say("stopping add-on %s (pid %d)" % (name, pid))
+        stop_pid(pid, "add-on %s" % name)
     say("done; SimHub left running")
 
 
@@ -502,15 +707,14 @@ def cert_gate(action, what):
         say("certificate %s: %s" % (what, last))
         return True
     if action == "check" and rc == 9:
-        say("certificate %s: %s" % (what, last), speak=True)
-        say("  continuing; renew in time: python3 ~/sc_lmcert.py new, then activate (game closed, "
-            "capture server stopped)")
+        say("certificate %s: %s" % (what, last))
+        say("  continuing; renew in time: %s new, then activate (game closed, "
+            "capture server stopped)" % CERT_TOOL_CMD)
         return True
     print(out)
     say("CERTIFICATE %s FAILED: the game will probably reject the capture server, so motion "
-        "telemetry and shaker effects may be disabled." % what.upper(), speak=True)
-    say("  status: python3 ~/sc_lmcert.py status    after a game/D-BOX update: python3 ~/sc_lmcert.py "
-        "repair (game closed)")
+        "telemetry and shaker effects may be disabled." % what.upper())
+    say("  status: %s status    after a game/D-BOX update: %s repair (game closed)" % (CERT_TOOL_CMD, CERT_TOOL_CMD))
     can_repair = action == "check"
     choice = CERT_ON_FAIL
     if choice == "repair" and not can_repair:
@@ -543,9 +747,9 @@ def cert_gate(action, what):
             rc, out = run_lmcert("check")
             last = out.splitlines()[-1] if out else ""
             if rc in (0, 9):
-                say("certificate repaired: %s" % last, speak=True)
+                say("certificate repaired: %s" % last)
                 return True
-        say("REPAIR DID NOT FIX IT (sc_lmcert exit %s); nothing else was changed" % rc, speak=True)
+        say("REPAIR DID NOT FIX IT (sc_lmcert exit %s); nothing else was changed" % rc)
         choice = "abort" if CERT_ON_FAIL == "repair" else None
         if choice is None:
             while True:
@@ -562,9 +766,16 @@ def cert_gate(action, what):
                     break
     if choice == "abort":
         fail("start-up aborted after the certificate %s" % what)
-    say("WARNING: continuing after a failed certificate %s; motion telemetry may be disabled" % what,
-        speak=True)
+    say("WARNING: continuing after a failed certificate %s; motion telemetry may be disabled" % what)
     return False
+
+
+def cmd_rollback():
+    """Undo the newest update (setup/common/scm_update.py rollback). -> exit code."""
+    scm_update = _shared("scm_update")
+    return scm_update.rollback("linux", REPO_DIR, HOME, say,
+                               game_running=lambda: bool(scan(GAME_EXE)),
+                               simhub_running=lambda: simhub_state()[0] == "running")
 
 
 def update_gate():
@@ -584,7 +795,7 @@ def update_gate():
         return False
     return scm_update.gate("linux", REPO_DIR, HOME, say,
                            game_running=lambda: bool(scan(GAME_EXE)),
-                           simhub_running=lambda: bool(scan(SIMHUB_NEEDLE)))
+                           simhub_running=lambda: simhub_state()[0] == "running")
 
 
 def motion_changed_reminder():
@@ -595,23 +806,142 @@ def motion_changed_reminder():
     print("  !! anyone rides. First run: nobody in the rig and motion power OFF, then power ON")
     print("  !! with nobody in the rig, then a person.")
     say("Platform movement values have changed in this update. Check your SimHub motion settings "
-        "before anyone rides.", speak=True)
+        "before anyone rides.")
 
 
 # ----------------------------------------------------------------------------- main
-STATE = {"server": None, "bridge": None, "cert_ok": True, "motion_changed": False}
+STATE = {"server": None, "bridge": None, "cert_ok": True, "motion_changed": False, "addons": []}
+
+
+# ---------------------------------------------------------------- add-ons (taps with a "run" command)
+PROCESSES = PROC.processes     # [(pid, argv)]; the Windows launcher replaces it
+ADDON_BRIDGE_DIR = REPO_DIR    # given to add-ons as SC_BRIDGE_DIR; the Windows launcher sets its own
+
+
+def _taps_module():
+    try:
+        import scm_taps     # next to this file (scripts/, or the Windows install folder)
+        return scm_taps
+    except Exception as e:  # noqa: BLE001  add-ons are optional
+        say("add-ons not checked (%s)" % e)
+        return None
+
+
+def addon_commands():
+    """[(name, argv)] of the tap "run" commands to start; prints why a tap is not started."""
+    if os.environ.get("SC_START_NO_ADDONS") == "1":
+        say("add-ons not started (SC_START_NO_ADDONS=1)")
+        return []
+    T = _taps_module()
+    if T is None:
+        return []
+    taps, notes = T.load()
+    for n in notes:
+        say("add-on tap file " + n)
+    out = []
+    for t in taps:
+        argv, why = T.run_command(t, sys.executable)
+        if argv:
+            out.append((t["name"], argv))
+        elif why:
+            say("add-on %s: not started (%s); it still gets its telemetry copy on UDP %d" % (t["name"], why, t["port"]))
+    return out
+
+
+def _same_command(argv, cmdline_argv):
+    """A running process started with this add-on command (any python interpreter)."""
+    return len(cmdline_argv) == len(argv) and PROC.program(cmdline_argv) == PROC.program(argv) \
+        and cmdline_argv[1:] == argv[1:]
+
+
+def addon_leftovers(cmds=None):
+    """[(pid, name)] of add-on processes from an earlier run."""
+    cmds = addon_commands() if cmds is None else cmds
+    if not cmds:
+        return []
+    out = []
+    for pid, argv in PROCESSES():
+        for name, cmd in cmds:
+            if _same_command(cmd, argv):
+                out.append((pid, name))
+    return out
+
+
+def start_addons(cmds):
+    """Start each add-on; one that fails to start is reported, never stops the launcher."""
+    env = dict(os.environ, SC_BRIDGE_DIR=ADDON_BRIDGE_DIR)   # where the bridge (and its field database) is
+    for name, argv in cmds:
+        try:
+            proc, log = start_logged(argv, "add-on %s" % name, "addon_%s.log" % name, stdin=subprocess.DEVNULL, env=env)
+        except OSError as e:
+            say("WARNING: add-on %s could not be started (%s)" % (name, e))
+            continue
+        STATE["addons"].append((proc, name, log))
+
+
+def stop_addons():
+    for proc, name, _log in STATE["addons"]:
+        stop_proc(proc, "add-on %s" % name)
+    STATE["addons"] = []
+
+
+def check_addons(warned):
+    """Report each add-on that stopped by itself (once). -> the updated set of warned names."""
+    for proc, name, log in STATE["addons"]:
+        if name not in warned and proc.poll() is not None:
+            say("add-on %s has stopped (exit code %s); motion is not affected. Its log: %s" % (name, proc.returncode, log))
+            if EL is not None:
+                EL.child_exit("add-on %s" % name, proc.returncode, log, during="play")
+            warned.add(name)
+    return warned
 
 
 def cleanup():
+    stop_addons()
     stop_proc(STATE["bridge"], "bridge")
     stop_proc(STATE["server"], "capture server")
     STATE["bridge"] = STATE["server"] = None
 
 
-def fail(msg):
-    say("STOPPED: " + msg, speak=True)
+def fail(msg, trace="", level="error"):
+    say("STOPPED: " + msg)
+    if EL is not None and EL.current() is not None:
+        EL.report(level, text=msg, trace=trace)
     cleanup()
     sys.exit(1)
+
+
+def child_stopped(proc, name, logpath):
+    """A child stopped while the game runs: record it in the error log."""
+    if EL is not None and proc is not None and proc.poll() is not None:
+        EL.child_exit(name, proc.returncode, logpath, during="play")
+
+
+def run_logged(program, body, closing):
+    """Run body() with an error log (scm_errlog): problems are explained in plain English and a
+    log is kept when the run had an error or a crash. closing() runs at the end in every case."""
+    if EL is not None:
+        EL.start(program)
+    code = 0
+    try:
+        body()
+    except KeyboardInterrupt:
+        print()
+        say("interrupted")
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+        raise
+    except BaseException as e:  # noqa: BLE001  recorded, then shown as usual
+        code = 1
+        if EL is not None:
+            EL.report("crash", e)
+        raise
+    finally:
+        try:
+            closing()
+        finally:
+            if EL is not None:
+                EL.finish(code)
 
 
 def on_signal(signum, frame):
@@ -653,7 +983,13 @@ def main():
     game_running = bool(scan(GAME_EXE))
     if not game_running and (scan(LAUNCHER_EXE) or gamescope_for_launcher()):
         say("an RSI Launcher from an earlier session is still open; sc-launch.sh will restart it")
-    simhub_running = bool(scan(SIMHUB_NEEDLE))
+    sh_state, sh_pids = simhub_state()
+    if sh_state == "stuck":
+        clear_stuck_simhub(sh_pids)
+    simhub_running = sh_state == "running"
+    if simhub_running and len(sh_pids) > 1:
+        say("WARNING: %d SimHub processes are running (pids %s). A second SimHub can hold the plugin's UDP "
+            "port; close SimHub and check with: pgrep -af SimHubWPF" % (len(sh_pids), ", ".join(map(str, sh_pids))))
     if not game_running and not os.path.exists(SC_LAUNCH):
         fail("missing %s" % SC_LAUNCH)
     say("game already running: %s   SimHub already running: %s" % (
@@ -664,6 +1000,10 @@ def main():
         for pid, cmd in scan(*needles):
             say("stopping leftover %s (pid %d)" % (name, pid))
             stop_pid(pid, name)
+    addons = addon_commands()
+    for pid, name in addon_leftovers(addons):
+        say("stopping leftover add-on %s (pid %d)" % (name, pid))
+        stop_pid(pid, "add-on %s" % name)
     busy_tcp = listening("tcp", CAPTURE_PORT_TCP)
     busy_udp = listening("udp", BRIDGE_PORT_UDP)
     if busy_tcp or busy_udp:
@@ -696,6 +1036,9 @@ def main():
             fail("bridge self-test failed: " + msg)
         say(("bridge self-test passed: " if ok else "bridge self-test: ") + msg)
 
+    # 5b. add-ons (taps with a run command); after the self-test so they never see test frames
+    start_addons(addons)
+
     # 6. SimHub, never a second instance
     if os.path.exists(HAPTICS_DLL):
         say("SC Haptics plugin installed (%s)" % os.path.basename(HAPTICS_DLL))
@@ -710,9 +1053,9 @@ def main():
             subprocess.Popen([SIMHUB_WINE, SIMHUB_EXE], env=env, stdout=lf,
                              stderr=subprocess.STDOUT, start_new_session=True)
         end = time.monotonic() + 60
-        while time.monotonic() < end and not scan(SIMHUB_NEEDLE):
+        while time.monotonic() < end and simhub_state()[0] != "running":
             time.sleep(1)
-        if not scan(SIMHUB_NEEDLE):
+        if simhub_state()[0] != "running":
             fail("SimHub did not appear within 60 s (log %s)" % os.path.join(LOG_DIR, "simhub.log"))
         say("SimHub started (it keeps running after this script ends)")
         time.sleep(5)   # let SimHub log which game it loaded
@@ -723,7 +1066,7 @@ def main():
         say("could not read SimHub's active game from its log; make sure Star Citizen is selected in SimHub")
     elif SIMDEF_UUID not in active:
         say("WARNING: SimHub's active game is %s, not Star Citizen. SimHub will wait for that game's "
-            "data and the rig gets nothing. Select Star Citizen in SimHub's game list." % active, speak=True)
+            "data and the rig gets nothing. Select Star Citizen in SimHub's game list." % active)
     else:
         say("SimHub's active game: Star Citizen")
 
@@ -741,8 +1084,7 @@ def main():
         # is flowing, so it cannot confirm the SimHub connection before launch. Restore this
         # line if the controller's LED behaviour changes:
         # print("   - rig LED green")
-        say("Rig check. Press Enter when the rig is powered on and SimHub shows it connected.",
-            speak=True)
+        say("Rig check. Press Enter when the rig is powered on and SimHub shows it connected.")
         input("  Press Enter when the rig is powered on and SimHub shows it connected "
               "(Ctrl-C to stop): ")
 
@@ -753,8 +1095,7 @@ def main():
     else:
         game = subprocess.Popen([SC_LAUNCH], cwd=GAME_PREFIX, stdout=subprocess.DEVNULL,
                                 stderr=subprocess.DEVNULL, start_new_session=True)
-        say("started sc-launch.sh (pid %d); its own log is sc-launch.log in the game prefix" % game.pid,
-            speak=True)
+        say("started sc-launch.sh (pid %d); its own log is sc-launch.log in the game prefix" % game.pid)
 
     # 9. watch until the launcher and the game are gone
     say("motion pipeline running. Close the game and the RSI Launcher to stop it, or press Ctrl-C.")
@@ -763,28 +1104,24 @@ def main():
             "If the game does not connect: python3 ~/sc_lmcert.py status")
     gone = 0
     warned = False
+    addons_warned = set()
     game_seen = bool(scan(GAME_EXE))
-    close_at = None
+    told = False
     while True:
         time.sleep(5)
         if not warned and (brg.poll() is not None or srv.poll() is not None):
             which = "bridge" if brg.poll() is not None else "capture server"
             say("WARNING: the %s has stopped; motion output has stopped. Run python3 ~/sc_start.py "
-                "again to restart it (the game keeps running)." % which, speak=True)
+                "again to restart it (the game keeps running)." % which)
+            child_stopped(brg, "bridge", brg_log) if which == "bridge" else child_stopped(srv, "capture server", srv_log)
             warned = True
-        game_now = bool(scan(GAME_EXE))
-        if game_now:
-            if close_at is not None:
-                say("game started again; launcher close cancelled")
-            game_seen, close_at = True, None
-        elif game_seen and AUTO_CLOSE_AFTER_GAME is not None:
-            if close_at is None:
-                close_at = time.monotonic() + AUTO_CLOSE_AFTER_GAME
-                say("Star Citizen has closed. Closing the launcher in %d seconds; start the game "
-                    "again to cancel." % AUTO_CLOSE_AFTER_GAME, speak=True)
-            elif time.monotonic() >= close_at:
-                close_game_prefix("game exited %d s ago" % AUTO_CLOSE_AFTER_GAME)
-                game_seen, close_at = False, None
+        addons_warned = check_addons(addons_warned)
+        if scan(GAME_EXE):
+            game_seen, told = True, False
+        elif game_seen and not told:
+            say("Star Citizen has closed. The launcher stays open (nothing is closed for you); close it "
+                "when you are done. Leftover Wine: python3 ~/sc_start.py cleanup")
+            told = True
         alive = (bool(scan(*GAME_NEEDLES)) or bool(gamescope_for_launcher())
                  or (game is not None and game.poll() is None))
         gone = 0 if alive else gone + 1
@@ -797,16 +1134,18 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["stop"]:
         cmd_stop()
         sys.exit(0)
+    if sys.argv[1:] == ["rollback"]:
+        sys.exit(cmd_rollback())
+    if sys.argv[1:2] == ["cleanup"]:
+        sys.exit(cmd_cleanup(sys.argv[2:]))
     if sys.argv[1:]:
-        sys.exit("usage: python3 ~/sc_start.py        (start everything)\n"
-                 "       python3 ~/sc_start.py stop   (close launcher + Wine after the game, "
-                 "stop bridge and capture server; SimHub stays)")
-    try:
-        main()
-    except KeyboardInterrupt:
-        print()
-        say("interrupted")
-    finally:
+        sys.exit("usage: python3 ~/sc_start.py           (start everything)\n"
+                 "       python3 ~/sc_start.py stop      (close launcher + Wine after the game, "
+                 "stop bridge and capture server; SimHub stays)\n"
+                 "       python3 ~/sc_start.py rollback  (undo the newest update; asks first)\n"
+                 "       python3 ~/sc_start.py cleanup [game|simhub|all] [--yes] [--rig-off]\n"
+                 "                                       (end leftover Wine; lists and asks first)")
+    def closing():
         cleanup()
         say("bridge and capture server stopped; SimHub left running")
         # The app-menu entry sets SC_START_HOLD=1 so its terminal window stays open until
@@ -816,3 +1155,5 @@ if __name__ == "__main__":
                 input("Press Enter to close this window. ")
             except (EOFError, KeyboardInterrupt):
                 pass
+
+    run_logged("sc_start", main, closing)

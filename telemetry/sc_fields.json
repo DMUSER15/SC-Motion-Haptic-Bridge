@@ -1,0 +1,1251 @@
+{
+ "schema": "sc-telemetry-fields",
+ "contract": 1,
+ "db_version": "2026-11-17.1",
+ "source": "SC Motion Haptic Bridge field database: the source of truth for what the telemetry posts mean. Every finding is recorded here first; docs and add-ons follow from it. Check: python3 tools/fields_db.py check",
+ "post": {
+  "format": "json",
+  "keys": [
+   "t",
+   "ev",
+   "name",
+   "m",
+   "v"
+  ],
+  "synthetic_names": [
+   "sc_start_selftest"
+  ]
+ },
+ "taps": {
+  "supported": true,
+  "ports": [
+   [
+    61704,
+    61708
+   ],
+   [
+    61720,
+    61739
+   ]
+  ],
+  "max": 8,
+  "run": true,
+  "dir": "taps.d in the bridge settings folder (~/.config/sc-motion, Windows %APPDATA%\\sc-motion; env SC_BRIDGE_CONFIG_DIR)",
+  "kill_switch": "LM_TEE_TAPS=0 (no copies), SC_START_NO_ADDONS=1 (no run commands)"
+ },
+ "resets": [
+  {
+   "on_ev": 2,
+   "clear_ev": [
+    1,
+    3,
+    4,
+    9
+   ]
+  }
+ ],
+ "events": [
+  {
+   "ev": 0,
+   "name": "global",
+   "label": "Global",
+   "rate": "frame",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 1,
+   "name": "enter_vehicle",
+   "label": "Enter vehicle",
+   "rate": "on change",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 2,
+   "name": "leave_vehicle",
+   "label": "Leave vehicle",
+   "rate": "on change",
+   "confidence": "Observed",
+   "notes": "no fields; while moving > 5 m/s = destroyed (Probable)"
+  },
+  {
+   "ev": 3,
+   "name": "vehicle_frame",
+   "label": "Vehicle frame",
+   "rate": "frame",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 4,
+   "name": "vibration",
+   "label": "Vibration (19 channels)",
+   "rate": "frame",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 5,
+   "name": "weapon",
+   "label": "Weapon fired",
+   "rate": "per shot",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 6,
+   "name": "ordnance",
+   "label": "Explosive ordnance launched",
+   "rate": "per launch",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 7,
+   "name": "vehicle_impact",
+   "label": "Vehicle impact (incoming hit)",
+   "rate": "per hit",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 8,
+   "name": "explosion_impact",
+   "label": "Vehicle explosion impact",
+   "rate": "never posted",
+   "confidence": "Unknown",
+   "notes": ""
+  },
+  {
+   "ev": 9,
+   "name": "coupling",
+   "label": "Coupled / decoupled",
+   "rate": "on change",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 10,
+   "name": "role",
+   "label": "Role",
+   "rate": "on change",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 11,
+   "name": "turret",
+   "label": "Turret slew",
+   "rate": "while operating",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 12,
+   "name": "actor",
+   "label": "Actor (player body)",
+   "rate": "frame",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 13,
+   "name": "recoil",
+   "label": "Recoil",
+   "rate": "frame after first use",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 14,
+   "name": "heartbeat",
+   "label": "Heartbeat",
+   "rate": "1 Hz",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 15,
+   "name": "force_reaction",
+   "label": "Force reaction",
+   "rate": "never posted",
+   "confidence": "Unknown",
+   "notes": ""
+  },
+  {
+   "ev": 16,
+   "name": "footstep",
+   "label": "Footstep",
+   "rate": "per step",
+   "confidence": "Observed",
+   "notes": ""
+  },
+  {
+   "ev": 17,
+   "name": "audio_haptic",
+   "label": "Audio haptic",
+   "rate": "never posted",
+   "confidence": "Unknown",
+   "notes": ""
+  },
+  {
+   "ev": 18,
+   "name": "ground_vehicle",
+   "label": "Ground vehicle",
+   "rate": "not tested",
+   "confidence": "Unknown",
+   "notes": ""
+  },
+  {
+   "ev": 19,
+   "name": "throw",
+   "label": "Throw",
+   "rate": "per throw",
+   "confidence": "Observed",
+   "notes": ""
+  }
+ ],
+ "fields": [
+  {
+   "key": "ev0.id93",
+   "ev": 0,
+   "id": 93,
+   "name": "frame_dt",
+   "label": "Frame time",
+   "short": "DT",
+   "type": "float",
+   "unit": "s",
+   "confidence": "Observed",
+   "mfd": "low",
+   "range": [
+    0,
+    0.2
+   ]
+  },
+  {
+   "key": "ev1.id30",
+   "ev": 1,
+   "id": 30,
+   "name": "ship_name",
+   "label": "Ship name",
+   "short": "SHIP",
+   "type": "string",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "high",
+   "notes": "already decoded, e.g. AEGS_Reclaimer"
+  },
+  {
+   "key": "ev3.id92",
+   "ev": 3,
+   "id": 92,
+   "name": "gear",
+   "label": "Landing gear",
+   "short": "GEAR",
+   "type": "float",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "high",
+   "range": [
+    0,
+    1
+   ],
+   "enum": [
+    {
+     "value": 0,
+     "name": "up"
+    },
+    {
+     "value": 0.5,
+     "name": "moving"
+    },
+    {
+     "value": 1,
+     "name": "down"
+    }
+   ]
+  },
+  {
+   "key": "ev3.id4",
+   "ev": 3,
+   "id": 4,
+   "name": "engines",
+   "label": "Engines on",
+   "short": "ENG",
+   "type": "int",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "high",
+   "enum": [
+    {
+     "value": 0,
+     "name": "off"
+    },
+    {
+     "value": 1,
+     "name": "on"
+    }
+   ]
+  },
+  {
+   "key": "ev3.id42",
+   "ev": 3,
+   "id": 42,
+   "name": "vtol",
+   "label": "VTOL position",
+   "short": "VTOL",
+   "type": "float",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "high",
+   "range": [
+    0,
+    1
+   ]
+  },
+  {
+   "key": "ev3.id9",
+   "ev": 3,
+   "id": 9,
+   "name": "velocity",
+   "label": "Velocity (body frame)",
+   "short": "VEL",
+   "type": "xyz",
+   "unit": "m/s",
+   "confidence": "Observed",
+   "mfd": "high"
+  },
+  {
+   "key": "ev3.id40",
+   "ev": 3,
+   "id": 40,
+   "name": "accel_total",
+   "label": "Total acceleration",
+   "short": "ACC",
+   "type": "xyz",
+   "unit": "m/s²",
+   "confidence": "Observed",
+   "mfd": "medium",
+   "notes": "|id40| = 9.81 when landed"
+  },
+  {
+   "key": "ev3.id38",
+   "ev": 3,
+   "id": 38,
+   "name": "accel_thrust",
+   "label": "Thrust acceleration",
+   "short": "THRUST",
+   "type": "xyz",
+   "unit": "m/s²",
+   "confidence": "Observed",
+   "mfd": "low",
+   "notes": "keeps its last value on the ground"
+  },
+  {
+   "key": "ev3.id68",
+   "ev": 3,
+   "id": 68,
+   "name": "accel_thrust_dup",
+   "label": "Thrust acceleration (duplicate)",
+   "short": "THR2",
+   "type": "xyz",
+   "unit": "m/s²",
+   "confidence": "Observed",
+   "mfd": "none",
+   "notes": "same as id38"
+  },
+  {
+   "key": "ev3.id39",
+   "ev": 3,
+   "id": 39,
+   "name": "accel_aero",
+   "label": "Aerodynamic acceleration",
+   "short": "AERO",
+   "type": "xyz",
+   "unit": "m/s²",
+   "confidence": "Observed",
+   "mfd": "medium",
+   "notes": "0 in space"
+  },
+  {
+   "key": "ev3.id94",
+   "ev": 3,
+   "id": 94,
+   "name": "speed_density",
+   "label": "Speed × air density",
+   "short": "DENS",
+   "type": "float",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "medium"
+  },
+  {
+   "key": "ev3.id35",
+   "ev": 3,
+   "id": 35,
+   "name": "ang_vel",
+   "label": "Angular velocity",
+   "short": "ANGV",
+   "type": "xyz",
+   "unit": "rad/s",
+   "confidence": "Observed",
+   "mfd": "low"
+  },
+  {
+   "key": "ev3.id34",
+   "ev": 3,
+   "id": 34,
+   "name": "ang_acc",
+   "label": "Angular acceleration",
+   "short": "ANGA",
+   "type": "xyz",
+   "unit": "rad/s²",
+   "confidence": "Observed",
+   "mfd": "low"
+  },
+  {
+   "key": "ev3.id41",
+   "ev": 3,
+   "id": 41,
+   "name": "ang_acc_cmd",
+   "label": "Commanded angular acceleration",
+   "short": "ANGC",
+   "type": "xyz",
+   "unit": "rad/s²",
+   "confidence": "Probable",
+   "mfd": "low"
+  },
+  {
+   "key": "ev3.id43",
+   "ev": 3,
+   "id": 43,
+   "name": "size_class",
+   "label": "Vehicle size class",
+   "short": "SIZE",
+   "type": "int",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "medium",
+   "notes": "300i = 2, Reclaimer = 6"
+  },
+  {
+   "key": "ev3.id44",
+   "ev": 3,
+   "id": 44,
+   "name": "unknown_44",
+   "label": "Unknown (ev3 id44)",
+   "short": "EV3/44",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "0 in every recorded frame"
+  },
+  {
+   "key": "ev4.id38",
+   "ev": 4,
+   "id": 38,
+   "name": "vib_38",
+   "label": "Vibration channel 38",
+   "short": "VIB38",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id39",
+   "ev": 4,
+   "id": 39,
+   "name": "vib_39",
+   "label": "Vibration channel 39",
+   "short": "VIB39",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id40",
+   "ev": 4,
+   "id": 40,
+   "name": "vib_40",
+   "label": "Vibration channel 40",
+   "short": "VIB40",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id41",
+   "ev": 4,
+   "id": 41,
+   "name": "boost",
+   "label": "Boost active",
+   "short": "BOOST",
+   "type": "float",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "high",
+   "notes": "short pulse at gear start on planets"
+  },
+  {
+   "key": "ev4.id42",
+   "ev": 4,
+   "id": 42,
+   "name": "vib_42",
+   "label": "Vibration channel 42",
+   "short": "VIB42",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id43",
+   "ev": 4,
+   "id": 43,
+   "name": "atmo_rumble",
+   "label": "Atmospheric speed rumble",
+   "short": "ATMO",
+   "type": "float",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "low"
+  },
+  {
+   "key": "ev4.id44",
+   "ev": 4,
+   "id": 44,
+   "name": "vib_44",
+   "label": "Vibration channel 44",
+   "short": "VIB44",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id45",
+   "ev": 4,
+   "id": 45,
+   "name": "vib_45",
+   "label": "Vibration channel 45",
+   "short": "VIB45",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id46",
+   "ev": 4,
+   "id": 46,
+   "name": "vib_46",
+   "label": "Vibration channel 46",
+   "short": "VIB46",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id47",
+   "ev": 4,
+   "id": 47,
+   "name": "vib_47",
+   "label": "Vibration channel 47",
+   "short": "VIB47",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id48",
+   "ev": 4,
+   "id": 48,
+   "name": "vib_48",
+   "label": "Vibration channel 48",
+   "short": "VIB48",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id49",
+   "ev": 4,
+   "id": 49,
+   "name": "vib_49",
+   "label": "Vibration channel 49",
+   "short": "VIB49",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id50",
+   "ev": 4,
+   "id": 50,
+   "name": "vib_50",
+   "label": "Vibration channel 50",
+   "short": "VIB50",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id51",
+   "ev": 4,
+   "id": 51,
+   "name": "vib_51",
+   "label": "Vibration channel 51",
+   "short": "VIB51",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id52",
+   "ev": 4,
+   "id": 52,
+   "name": "vib_52",
+   "label": "Vibration channel 52",
+   "short": "VIB52",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id53",
+   "ev": 4,
+   "id": 53,
+   "name": "shield_rumble",
+   "label": "Shield-hit rumble",
+   "short": "RUMBLE",
+   "type": "float",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "medium",
+   "range": [
+    0,
+    1
+   ]
+  },
+  {
+   "key": "ev4.id54",
+   "ev": 4,
+   "id": 54,
+   "name": "vib_54",
+   "label": "Vibration channel 54",
+   "short": "VIB54",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id55",
+   "ev": 4,
+   "id": 55,
+   "name": "vib_55",
+   "label": "Vibration channel 55",
+   "short": "VIB55",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev4.id56",
+   "ev": 4,
+   "id": 56,
+   "name": "vib_56",
+   "label": "Vibration channel 56",
+   "short": "VIB56",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "never seen non-zero"
+  },
+  {
+   "key": "ev5.id104",
+   "ev": 5,
+   "id": 104,
+   "name": "weapon_factor",
+   "label": "Weapon factor / size",
+   "short": "WPN",
+   "type": "float",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "medium",
+   "notes": "1.0 with countermeasure"
+  },
+  {
+   "key": "ev5.id171",
+   "ev": 5,
+   "id": 171,
+   "name": "weapon_kind",
+   "label": "Weapon kind",
+   "short": "KIND",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "medium",
+   "notes": "2 = countermeasure (Observed); 0/1 meaning unknown"
+  },
+  {
+   "key": "ev6.id104",
+   "ev": 6,
+   "id": 104,
+   "name": "missile_size",
+   "label": "Missile size",
+   "short": "MSL",
+   "type": "int",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "medium"
+  },
+  {
+   "key": "ev6.id171",
+   "ev": 6,
+   "id": 171,
+   "name": "ordnance_kind",
+   "label": "Ordnance kind",
+   "short": "KIND",
+   "type": "int",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "none",
+   "notes": "always 0 for missiles"
+  },
+  {
+   "key": "ev7.id40",
+   "ev": 7,
+   "id": 40,
+   "name": "shield_damage",
+   "label": "Shield damage",
+   "short": "SHLD",
+   "type": "float",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "medium"
+  },
+  {
+   "key": "ev7.id39",
+   "ev": 7,
+   "id": 39,
+   "name": "hull_damage",
+   "label": "Hull damage",
+   "short": "HULL",
+   "type": "float",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "high",
+   "notes": "rises per hit (cumulative, Probable)"
+  },
+  {
+   "key": "ev7.id38",
+   "ev": 7,
+   "id": 38,
+   "name": "hit_position",
+   "label": "Hit position",
+   "short": "HITPOS",
+   "type": "xyz",
+   "unit": "m",
+   "confidence": "Probable",
+   "mfd": "low",
+   "notes": "huge outlier = missile hit (Probable)"
+  },
+  {
+   "key": "ev7.id42",
+   "ev": 7,
+   "id": 42,
+   "name": "hit_azimuth",
+   "label": "Hit azimuth",
+   "short": "AZ",
+   "type": "float",
+   "unit": "rad",
+   "confidence": "Observed",
+   "mfd": "none",
+   "range": [
+    -3.1416,
+    3.1416
+   ],
+   "notes": "convention unknown (M9)"
+  },
+  {
+   "key": "ev7.id43",
+   "ev": 7,
+   "id": 43,
+   "name": "hit_elevation",
+   "label": "Hit elevation",
+   "short": "EL",
+   "type": "float",
+   "unit": "rad",
+   "confidence": "Observed",
+   "mfd": "none",
+   "range": [
+    -1.5708,
+    1.5708
+   ],
+   "notes": "up positive (Probable)"
+  },
+  {
+   "key": "ev7.id41",
+   "ev": 7,
+   "id": 41,
+   "name": "unknown_41",
+   "label": "Unknown (ev7 id41)",
+   "short": "EV7/41",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev9.id38",
+   "ev": 9,
+   "id": 38,
+   "name": "decoupled",
+   "label": "Decoupled",
+   "short": "DCPL",
+   "type": "int",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "high",
+   "enum": [
+    {
+     "value": 0,
+     "name": "coupled"
+    },
+    {
+     "value": 1,
+     "name": "decoupled"
+    }
+   ],
+   "notes": "state unknown until the first change"
+  },
+  {
+   "key": "ev10.id38",
+   "ev": 10,
+   "id": 38,
+   "name": "role",
+   "label": "Role",
+   "short": "ROLE",
+   "type": "int",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "high",
+   "enum": [
+    {
+     "value": 0,
+     "name": "foot"
+    },
+    {
+     "value": 1,
+     "name": "pilot"
+    },
+    {
+     "value": 2,
+     "name": "operating"
+    },
+    {
+     "value": 3,
+     "name": "seated"
+    }
+   ],
+   "notes": "2 = operating a turret or salvage head, 3 = seated not controlling (Probable)"
+  },
+  {
+   "key": "ev11.id38",
+   "ev": 11,
+   "id": 38,
+   "name": "turret_slew",
+   "label": "Turret slew",
+   "short": "SLEW",
+   "type": "xyz",
+   "unit": "rad/s",
+   "confidence": "Probable",
+   "mfd": "low",
+   "notes": "axis signs unknown"
+  },
+  {
+   "key": "ev12.id47",
+   "ev": 12,
+   "id": 47,
+   "name": "heart_rate",
+   "label": "Heart rate",
+   "short": "BPM",
+   "type": "float",
+   "unit": "BPM",
+   "confidence": "Observed",
+   "mfd": "high"
+  },
+  {
+   "key": "ev12.id45",
+   "ev": 12,
+   "id": 45,
+   "name": "stance",
+   "label": "Stance",
+   "short": "STANCE",
+   "type": "int",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "medium",
+   "enum": [
+    {
+     "value": 0,
+     "name": "stand"
+    },
+    {
+     "value": 1,
+     "name": "crouch"
+    },
+    {
+     "value": 2,
+     "name": "prone"
+    }
+   ]
+  },
+  {
+   "key": "ev12.id39",
+   "ev": 12,
+   "id": 39,
+   "name": "airborne",
+   "label": "Airborne",
+   "short": "AIR",
+   "type": "int",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "low",
+   "enum": [
+    {
+     "value": 0,
+     "name": "ground"
+    },
+    {
+     "value": 1,
+     "name": "air"
+    }
+   ]
+  },
+  {
+   "key": "ev12.id9",
+   "ev": 12,
+   "id": 9,
+   "name": "player_velocity",
+   "label": "Player velocity",
+   "short": "WALK",
+   "type": "xyz",
+   "unit": "m/s",
+   "confidence": "Observed",
+   "mfd": "medium"
+  },
+  {
+   "key": "ev12.id38",
+   "ev": 12,
+   "id": 38,
+   "name": "player_accel",
+   "label": "Player acceleration",
+   "short": "PACC",
+   "type": "xyz",
+   "unit": "m/s²",
+   "confidence": "Observed",
+   "mfd": "low"
+  },
+  {
+   "key": "ev12.id35",
+   "ev": 12,
+   "id": 35,
+   "name": "player_ang_vel",
+   "label": "Player angular velocity",
+   "short": "PANG",
+   "type": "xyz",
+   "unit": "rad/s",
+   "confidence": "Probable",
+   "mfd": "low"
+  },
+  {
+   "key": "ev12.id41",
+   "ev": 12,
+   "id": 41,
+   "name": "actor_ready",
+   "label": "Actor ready (guess)",
+   "short": "READY",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none",
+   "notes": "0 only at first spawn"
+  },
+  {
+   "key": "ev12.id40",
+   "ev": 12,
+   "id": 40,
+   "name": "unknown_40",
+   "label": "Unknown (ev12 id40)",
+   "short": "EV12/40",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev12.id44",
+   "ev": 12,
+   "id": 44,
+   "name": "unknown_44",
+   "label": "Unknown (ev12 id44)",
+   "short": "EV12/44",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev12.id46",
+   "ev": 12,
+   "id": 46,
+   "name": "unknown_46",
+   "label": "Unknown (ev12 id46)",
+   "short": "EV12/46",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev12.id42",
+   "ev": 12,
+   "id": 42,
+   "name": "unknown_42",
+   "label": "Unknown (ev12 id42)",
+   "short": "EV12/42",
+   "type": "xyz",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev12.id43",
+   "ev": 12,
+   "id": 43,
+   "name": "unknown_43",
+   "label": "Unknown (ev12 id43)",
+   "short": "EV12/43",
+   "type": "xyz",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev12.id48",
+   "ev": 12,
+   "id": 48,
+   "name": "unknown_48",
+   "label": "Unknown (ev12 id48)",
+   "short": "EV12/48",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev13.id38",
+   "ev": 13,
+   "id": 38,
+   "name": "recoil_38",
+   "label": "Recoil vector 1",
+   "short": "RCL1",
+   "type": "xyz",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "low"
+  },
+  {
+   "key": "ev13.id39",
+   "ev": 13,
+   "id": 39,
+   "name": "recoil_39",
+   "label": "Recoil vector 2",
+   "short": "RCL2",
+   "type": "xyz",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "low"
+  },
+  {
+   "key": "ev13.id40",
+   "ev": 13,
+   "id": 40,
+   "name": "recoil_40",
+   "label": "Recoil vector 3",
+   "short": "RCL3",
+   "type": "xyz",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "low"
+  },
+  {
+   "key": "ev13.id41",
+   "ev": 13,
+   "id": 41,
+   "name": "recoil_41",
+   "label": "Recoil vector 4",
+   "short": "RCL4",
+   "type": "xyz",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "low"
+  },
+  {
+   "key": "ev13.id42",
+   "ev": 13,
+   "id": 42,
+   "name": "new_shot",
+   "label": "New shot",
+   "short": "SHOT",
+   "type": "int",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "medium"
+  },
+  {
+   "key": "ev14.id38",
+   "ev": 14,
+   "id": 38,
+   "name": "heart_rate",
+   "label": "Heart rate (1 Hz)",
+   "short": "BPM",
+   "type": "float",
+   "unit": "BPM",
+   "confidence": "Observed",
+   "mfd": "high"
+  },
+  {
+   "key": "ev16.id40",
+   "ev": 16,
+   "id": 40,
+   "name": "step_intensity",
+   "label": "Step intensity",
+   "short": "STEP",
+   "type": "float",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "low",
+   "range": [
+    0,
+    1
+   ]
+  },
+  {
+   "key": "ev16.id41",
+   "ev": 16,
+   "id": 41,
+   "name": "surface",
+   "label": "Surface material code",
+   "short": "SURF",
+   "type": "int",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "low",
+   "notes": "104 ground, 120 Reclaimer deck, ..."
+  },
+  {
+   "key": "ev16.id44",
+   "ev": 16,
+   "id": 44,
+   "name": "location_value",
+   "label": "Per-location value",
+   "short": "LOC",
+   "type": "float",
+   "unit": "",
+   "confidence": "Probable",
+   "mfd": "none"
+  },
+  {
+   "key": "ev16.id38",
+   "ev": 16,
+   "id": 38,
+   "name": "unknown_38",
+   "label": "Unknown (ev16 id38)",
+   "short": "EV16/38",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev16.id39",
+   "ev": 16,
+   "id": 39,
+   "name": "unknown_39",
+   "label": "Unknown (ev16 id39)",
+   "short": "EV16/39",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev16.id42",
+   "ev": 16,
+   "id": 42,
+   "name": "unknown_42",
+   "label": "Unknown (ev16 id42)",
+   "short": "EV16/42",
+   "type": "float",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev16.id43",
+   "ev": 16,
+   "id": 43,
+   "name": "unknown_43",
+   "label": "Unknown (ev16 id43)",
+   "short": "EV16/43",
+   "type": "int",
+   "unit": "",
+   "confidence": "Unknown",
+   "mfd": "none"
+  },
+  {
+   "key": "ev19.id38",
+   "ev": 19,
+   "id": 38,
+   "name": "throw",
+   "label": "Throw",
+   "short": "THROW",
+   "type": "float",
+   "unit": "",
+   "confidence": "Observed",
+   "mfd": "low"
+  }
+ ]
+}

@@ -30,7 +30,7 @@ apply saves the assigned locations in ~/.config/sc-motion/config.json, then runs
    4 cert-pair      ~/lm.crt + ~/lm.key for the capture server (created only if BOTH are absent)
    5 scripts        bridge, capture server, launcher, certificate tools, plugin source and
                     effects.json linked from this repository into your home folder (only these)
-   6 footprint      every livemotion.crt copy in the prefix = ~/lm.crt (sc_lmcert.py footprint all;
+   6 footprint      every livemotion.crt copy in the prefix = ~/lm.crt (sc_lmcert.py repair = restore missing copies + footprint all;
                     the connector reads the LiveMotionConnector copy since 2026-10-21)
    7 simdef         SimHub's game definition "Star Citizen" (24 fields, data conversion revision 3):
                     config/simhub/Star Citizen.simdef copied to SimHub\\PluginsData\\Common\\
@@ -126,9 +126,13 @@ def s_game(c):
 def s_dbox(c):
     if not c.dc:
         return "BLOCKED", "needs D2"
-    if os.path.isfile(os.path.join(C.connector_dir(c.dc), "dbxLive64.dll")):
-        return "DONE", "LiveMotionConnector present"
-    return "BLOCKED", ("D-BOX HaptiSync Center is not installed in this prefix. Guided install: "
+    ok, det = C.connector_state(c.dc)
+    if ok:
+        return "DONE", det
+    rc, _out = run_tool("sc_lmcert.py", "vault", "status", env=c.env)
+    if rc == 0:
+        return "BLOCKED", det + ". Your vault has a copy: game closed, run python3 ~/sc_lmcert.py repair, then plan again"
+    return "BLOCKED", (det + ". D-BOX HaptiSync Center is not installed in this prefix. Guided install: "
                        "python3 setup/linux/sc_motion_guide.py dbox")
 
 
@@ -225,15 +229,14 @@ def s_footprint(c):
     rc, out = run_tool("sc_lmcert.py", "check", env=c.env)
     if rc in (0, 9):
         return "DONE", last(out)
-    copies = C.dbox_cert_copies(c.dc)
-    known = (C.DBOX_ORIG_SHA, C.sha256(CRT))
-    if copies and all(C.sha256(p) in known for p in copies):
-        return "TODO", "some copies are D-BOX's original: sc_lmcert.py footprint all"
-    return "BLOCKED", last(out) + "; run: python3 ~/sc_lmcert.py status"
+    state, det = C.footprint_todo(c.dc, CRT, "sc_lmcert.py repair")
+    if state == "TODO":
+        return state, det
+    return "BLOCKED", det + "; " + last(out) + "; run: python3 ~/sc_lmcert.py status"
 
 
 def a_footprint(c):
-    rc, out = run_tool("sc_lmcert.py", "footprint", "all", env=c.env)
+    rc, out = run_tool("sc_lmcert.py", "repair", env=c.env)
     print("\n".join("      " + x for x in out.splitlines()))
     return rc == 0, last(out)
 
@@ -459,6 +462,7 @@ def do_apply(option, select, motion_hw=None):
             print("  %-3s %-14s %s %s" % (n, name, "done:" if ok else "FAILED:", res))
             if not ok:
                 print("Stopped at step %s. Nothing after it was changed." % n)
+                C.errlog_report("error", "installer step %s (%s) failed: %s" % (n, name, res))
                 break
     print()
     return show_plan(Ctx(option))
@@ -477,6 +481,9 @@ def save_motion_hw(hw):
 
 
 def main(argv):
+    if len(argv) > 1 and argv[1] == "addon":      # optional add-ons (setup/common/scm_addons.py)
+        import scm_addons
+        return scm_addons.main(argv)
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("cmd", nargs="?")
     ap.add_argument("--game-prefix")
@@ -499,4 +506,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(C.errlog_run("installer", main, sys.argv))

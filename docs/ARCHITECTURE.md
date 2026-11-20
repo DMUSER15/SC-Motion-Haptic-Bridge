@@ -10,7 +10,7 @@ Star Citizen (D-BOX LiveMotion output)
   -> gRPC + TLS to 127.0.0.1:61666, server name LiveMotionComm, trusts only livemotion.crt in that folder
   -> SC_Motion_Server.py: GetIdentification (client type 2 supported) + LiveMotionStream; one JSON datagram per event
        {"t": receive time, "ev": event key, "name": ..., "m": [field meanings], "v": [values]}
-  -> UDP 61700 -> lm_simhub4t.py tee (copies every datagram byte for byte)
+  -> UDP 61700 -> lm_simhub4t.py tee (copies every datagram byte for byte; add-on taps last)
        -> UDP 61702 -> lm_simhub4.py bridge (lm_simhub3 motion + haptics fields), 100 Hz
                     -> UDP 30777 -> SimHub External Sim "Star Citizen" (registered .simdef)
        -> UDP 61701 -> SC Haptics plugin -> SCHaptics.* properties -> ShakeIt "SC Low"/"SC High"
@@ -23,6 +23,39 @@ Star Citizen (D-BOX LiveMotion output)
 | 61701 | UDP | SC Haptics plugin (inside SimHub) |
 | 61702 | UDP | bridge (`lm_simhub4.py` behind the tee) |
 | 30777 | UDP | SimHub External Sim |
+
+The numbers live in one place, `setup/common/scm_ports.py` (`python3 setup/common/scm_ports.py` prints the table). The launchers, installers and verifiers read it. The capture server, tee, bridge and plugin keep their own numbers, because those files are released and checked byte for byte. 61703, 61709 and 61710 are reserved. 61704-61708 and 61720-61739 are kept for add-ons.
+
+"Is this program running" is decided by one rule, `setup/common/scm_proc.py`: the executable, or for `python [-options] script.py` the script. The launcher, the Linux setup code and the Windows helper all use it. On Linux a SimHub process whose Wine server is gone counts as stuck, not as running.
+
+## Public surface (what other programs may rely on)
+
+Add-ons and other tools use only what is listed here. They never import the bridge's Python modules: file names, functions and internal ports can change in any release.
+
+| Surface | What it is | Stability |
+|---|---|---|
+| Field database `telemetry/sc_fields.json` | every event and field: key `ev<N>.id<M>`, name, type (`int`, `float`, `xyz`, `string`), unit, confidence, value names | `"contract": 1`. Adding events, fields or keys is not a contract change. Removing or renaming a key, or changing a type or unit, is. |
+| Telemetry posts | the capture server's JSON posts `{"t", "ev", "name", "m", "v"}`, one per UDP datagram on 127.0.0.1, exactly as the tee receives them | part of contract 1. Posts whose `name` is in `post.synthetic_names` are the launcher's self-test, not game data. |
+| Ports | `setup/common/scm_ports.py`: the bridge's own ports and the add-on ranges | an add-on never binds a bridge port |
+| Settings folder | `~/.config/sc-motion/` (Windows `%APPDATA%\sc-motion`): `config.json` | keys may be added |
+| Add-on packages | `addon.json` + `release.json` at the top of an add-on; installed by `setup/common/scm_addons.py` into `~/.local/share/sc-motion/addons/<name>/<version>/` | part of contract 1 (see docs/UPDATING.md, Optional add-ons) |
+| Error logs | `~/.local/state/sc-motion/logs` (Windows `%LOCALAPPDATA%\sc-motion\logs`), written by `scm_errlog.py` | text for people, not a data format |
+
+Check the database with `python3 tools/fields_db.py check`. `python3 tools/fields_db.py table` prints it as a table, and `observe RECORDING` compares a recording with it. Every finding about what a field means goes into the database first; documents follow from it.
+
+### Add-on taps (contract v1 section 3)
+
+An add-on asks for its own copy of the telemetry with one file, `~/.config/sc-motion/taps.d/<name>.json` (Windows `%APPDATA%\sc-motion\taps.d`):
+
+```json
+{"name": "mfd", "port": 61704, "enabled": true, "run": ["{python}", "-u", "/abs/path/sc_mfd.py", "run"]}
+```
+
+- **The tee** reads the folder once when it starts and sends every post, byte for byte, to each usable tap **after** the bridge and plugin copies, on its own non-blocking socket. A tap that is missing, slow or broken never delays or changes the bridge and plugin copies; its send errors are counted in the tee's stats line (`mfd_err=0`). Any problem reading the files only means no taps. `LM_TEE_TAPS=0` turns all copies off.
+- **The launcher** starts each tap's `run` command after its self-test (so add-ons never see the test frames) and stops it, Ctrl-C first, when the pipeline stops; `sc_start.py stop` also ends one left from a crash. An add-on that stops by itself is reported once and never stops the motion pipeline. Its output goes to `~/lm_capture/launch/addon_<name>.log`. It gets `SC_BRIDGE_DIR` (where the bridge and its field database are). `SC_START_NO_ADDONS=1` starts none.
+- **Rules** (`scripts/scm_taps.py`; `python3 ~/scm_taps.py` lists the taps and why any are skipped): the name equals the file name; the port is in 61704-61708 or 61720-61739, is not a bridge port and is not used by an earlier file; at most 8 taps. `run` must be `{python}`, Python options (not `-c` / `-m`), then the absolute path of an existing `.py` file and its arguments. No shell is involved.
+- The verifier lists the taps, and `--live` checks that each one gets a byte-for-byte copy.
+- The field database says `"taps": {"supported": true, "ports": [...], "run": true}`; add-ons read that to choose their own mode.
 
 ## SimHub packet
 

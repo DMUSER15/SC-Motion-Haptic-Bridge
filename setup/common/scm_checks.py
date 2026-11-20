@@ -12,6 +12,46 @@ def _last(out):
     return lines[-1].strip() if lines else ""
 
 
+def tap_copies(R):
+    """Each add-on tap gets a byte-for-byte copy from the running tee (the add-on itself is not running)."""
+    try:
+        import scm_taps as T
+    except Exception as e:  # noqa: BLE001
+        R.add("INFO", "live", "add-on taps", "not checked (%s)" % e)
+        return
+    if os.environ.get("LM_TEE_TAPS") == "0":
+        R.add("INFO", "live", "add-on taps", "off (LM_TEE_TAPS=0)")
+        return
+    taps, notes = T.load()
+    for n in notes:
+        R.add("WARN", "live", "add-on tap file", n, "fix or remove the file in %s" % T.taps_dir())
+    if not taps:
+        R.add("INFO", "live", "add-on taps", "none in %s" % T.taps_dir())
+    for t in taps:
+        rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            rx.bind(("127.0.0.1", t["port"]))
+            rx.settimeout(0.3)
+            tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe = b'{"t": 0, "ev": 14, "name": "verify_probe", "m": [], "v": []}'
+            got = None
+            end = time.monotonic() + 2
+            while time.monotonic() < end and got != probe:
+                tx.sendto(probe, ("127.0.0.1", C.PORT_TEE_UDP))
+                try:
+                    got, _ = rx.recvfrom(4096)
+                except socket.timeout:
+                    pass
+            tx.close()
+            R.add("PASS" if got == probe else "FAIL", "live", "tee -> add-on %s (UDP %d)" % (t["name"], t["port"]),
+                  "byte-for-byte copy received" if got == probe else "no copy within 2 s",
+                  "the tee reads taps.d at start; check the bridge log for 'add-on tap'")
+        except OSError as e:
+            R.add("WARN", "live", "tee -> add-on %s (UDP %d)" % (t["name"], t["port"]), "port busy (%s): is the add-on running?" % e)
+        finally:
+            rx.close()
+
+
 def live_pipeline(R, S, capture_script, env, verify_dir, lmcert_selftest):
     """Start capture server + tee/bridge, check them, stop them. Caller has checked that the
     game, SimHub and the pipeline are not running. lmcert_selftest() -> (rc, output)."""
@@ -67,6 +107,8 @@ def live_pipeline(R, S, capture_script, env, verify_dir, lmcert_selftest):
                 R.add("WARN", "live", "tee -> plugin copy (UDP 61701)", "port busy (%s)" % e)
             finally:
                 rx.close()
+            if os.path.basename(S.BRIDGE_SCRIPT).lower() == "lm_simhub4t.py":
+                tap_copies(R)
     finally:
         for p, n in ((brg, "bridge"), (srv, "capture server")):
             if p is not None:

@@ -1,0 +1,13 @@
+{
+ "schema": "sc-control-panels",
+ "comment": "Cards of the control window, top to bottom. tier public = in every build; a developer profile (tools/dev/gui_profile.py) adds its own cards with tier dev. To move a card between them, move its entry (and file). A card whose file is missing is skipped.",
+ "panels": [
+  {"id": "updates", "module": "gui/panels/p_updates.py", "tier": "public", "title": "Updates"},
+  {"id": "bridge", "module": "gui/panels/p_bridge.py", "tier": "public", "title": "Motion bridge"},
+  {"id": "simhub", "module": "gui/panels/p_simhub.py", "tier": "public", "title": "SimHub"},
+  {"id": "game", "module": "gui/panels/p_game.py", "tier": "public", "title": "RSI Launcher / Star Citizen"},
+  {"id": "wine", "module": "gui/panels/p_wine.py", "tier": "public", "title": "Wine clean-up"},
+  {"id": "mfd", "module": "gui/panels/p_mfd.py", "tier": "public", "title": "MFD add-on"},
+  {"id": "logs", "module": "gui/panels/p_logs.py", "tier": "public", "title": "Logs"}
+ ]
+}

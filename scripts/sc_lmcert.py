@@ -14,8 +14,15 @@ unchanged; must sit next to this file in ~).
                                             D-BOX original in every other copy (no longer
                                             enough since 2026-10-21, see below)
   python3 ~/sc_lmcert.py footprint all      custom cert in every copy (the working layout)
-  python3 ~/sc_lmcert.py repair             = footprint all: puts ~/lm.crt back into every copy
-                                            after a game or D-BOX update replaced one (backups)
+  python3 ~/sc_lmcert.py repair             after a game or D-BOX update: restores missing
+                                            connector files from the vault, creates a missing
+                                            livemotion.crt copy (its folder exists), then
+                                            footprint all; saves the vault if there is none
+  python3 ~/sc_lmcert.py vault status|save|restore
+                                            the vault: a copy of D-BOX's two connector folders
+                                            (LiveMotionConnector, StarCitizen) kept outside the
+                                            prefix, so a reinstall or update that removed them
+                                            can be repaired (restore only creates missing files)
 
 new: 3650 days, same key type/size as the current ~/lm.crt, subject CN=LiveMotionComm,
      SAN DNS:LiveMotionComm, basicConstraints critical CA:TRUE (same extension shape as
@@ -33,18 +40,27 @@ check: ~/lm.crt valid >= 30 days (else WARN), key matches, and every copy the co
      LiveMotionConnector copy (Observed, probably after a game patch), so both are checked.
 Private keys: generated and compared on this machine only; never printed or copied
 anywhere except ~/lm.key and ~/lm_certs/*/lm.key (mode 600).
+repair (1.3): never overwrites a D-BOX file other than livemotion.crt; refuses while
+     StarCitizen.exe runs; prints one line per copy the connector may read (custom /
+     D-BOX original / missing / folder missing) and a record of created files in
+     ~/sc_certswap_backup/<time>_repair_restore/manifest.json.
+vault: ~/.local/share/sc-motion/connector (Windows %LOCALAPPDATA%\\sc-motion\\connector;
+     env SC_LMCERT_VAULT). save is read-only in the prefix and needs the connector DLL (not
+     0 bytes) and LiveMotionConnector.config; every livemotion.crt is stored as D-BOX's
+     original. An older vault is kept as connector.prev_<time>. Never in git.
 Exit codes: 0 ok, 1 usage, 2 game running, 3 bad/missing input, 4 no copies,
 5 unknown copy content, 6 verify failed, 7 capture server running, 8 selftest FAIL,
-9 check WARN, 10 check FAIL.
+9 check WARN, 10 check FAIL, 11 no permission to write (Windows: needs an administrator
+PowerShell).
 Test overrides: SC_LMCERT_HOME (folder holding lm.crt/lm.key/lm_certs), SC_LMCERT_PORT,
-plus the SC_CERT_* overrides of sc_certswap.py.
+SC_LMCERT_VAULT, plus the SC_CERT_* overrides of sc_certswap.py.
 """
 import json, os, shutil, socket, ssl, subprocess, sys, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sc_certswap as cs  # noqa: E402  (unchanged companion)
 
-VERSION = "1.2"
+VERSION = "1.3"
 HOME = os.environ.get("SC_LMCERT_HOME", os.path.expanduser("~"))
 CRT = os.path.join(HOME, "lm.crt")
 KEY = os.path.join(HOME, "lm.key")
@@ -54,8 +70,22 @@ PORT = int(os.environ.get("SC_LMCERT_PORT", "61666"))
 READ_REL = "ProgramData/D-BOX/Gaming/LiveMotion/StarCitizen/livemotion.crt"
 CONNECTOR_REL = "ProgramData/D-BOX/Gaming/LiveMotion/LiveMotionConnector/livemotion.crt"
 READ_RELS = (READ_REL, CONNECTOR_REL)  # copies the connector may read (see check above)
+CONNECTOR_DIRS = ("ProgramData/D-BOX/Gaming/LiveMotion/LiveMotionConnector",
+                  "ProgramData/D-BOX/Gaming/LiveMotion/StarCitizen")
 DAYS = 3650
 cs.CUSTOM = CRT  # keep both scripts on the same custom certificate
+
+
+def _vault_default():
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "sc-motion", "connector")
+
+
+VAULT = os.environ.get("SC_LMCERT_VAULT") or _vault_default()
+VAULT_MANIFEST = "manifest.json"
 
 
 def ossl(*args, inp=None):
@@ -179,6 +209,190 @@ def backup_prefix(tag):
     return bdir
 
 
+def read_states(custom_sha):
+    """One entry per copy the connector may read: (path, state). state: 'custom', 'D-BOX original',
+    'OTHER', 'missing' (its folder exists) or 'folder missing'."""
+    out = []
+    for p in read_paths():
+        if os.path.isfile(p):
+            out.append((p, cs.classify(cs.sha(p), custom_sha)))
+        elif os.path.isdir(os.path.dirname(p)):
+            out.append((p, "missing"))
+        else:
+            out.append((p, "folder missing"))
+    return out
+
+
+def short_state(s):
+    return {"custom (~/lm.crt)": "custom"}.get(s, s)
+
+
+# ---------------------------------------------------------------- vault
+def _vault_skip(name):
+    return name.startswith(".") or name.lower().endswith(".log")
+
+
+def vault_manifest():
+    try:
+        with open(os.path.join(VAULT, VAULT_MANIFEST)) as f:
+            m = json.load(f)
+        return m if isinstance(m, dict) and isinstance(m.get("files"), list) else None
+    except (OSError, ValueError):
+        return None
+
+
+def vault_problems():
+    """-> list of problems; empty = the vault is complete and unchanged since it was saved."""
+    m = vault_manifest()
+    if m is None:
+        return ["no vault at %s" % VAULT]
+    probs = []
+    for e in m["files"]:
+        rel = e.get("rel", "") if isinstance(e, dict) else ""
+        if not rel or rel.startswith(("/", "\\")) or ".." in rel.replace("\\", "/").split("/"):
+            probs.append("bad entry %r" % (rel,))
+            continue
+        p = os.path.join(VAULT, rel)
+        if not os.path.isfile(p):
+            probs.append("missing in the vault: " + rel)
+        elif cs.sha(p) != e.get("sha256"):
+            probs.append("changed in the vault: " + rel)
+    return probs
+
+
+def connector_source_problems(drive_c):
+    """Why the connector folders under drive_c cannot be saved (empty list = they can)."""
+    lmc = os.path.join(drive_c, CONNECTOR_DIRS[0])
+    probs = []
+    if not os.path.isfile(os.path.join(lmc, "LiveMotionConnector.config")):
+        probs.append("LiveMotionConnector/LiveMotionConnector.config missing")
+    dlls = [os.path.join(drive_c, d, "dbxLive64.dll") for d in CONNECTOR_DIRS]
+    good = [p for p in dlls if os.path.isfile(p) and os.path.getsize(p) > 0]
+    if not good:
+        probs.append("no usable dbxLive64.dll (missing or 0 bytes) in LiveMotionConnector or StarCitizen")
+    return probs
+
+
+def cmd_vault_status():
+    print("sc_lmcert %s vault status (read-only)" % VERSION)
+    print("  vault: %s" % VAULT)
+    m = vault_manifest()
+    if m is None:
+        print("  no vault saved yet. Save one from a working prefix: python3 ~/sc_lmcert.py vault save")
+        return 3
+    print("  saved %s from %s, %d files" % (m.get("saved", "?"), m.get("source", "?"), len(m["files"])))
+    probs = vault_problems()
+    for p in probs:
+        print("  PROBLEM: " + p)
+    missing = [e["rel"] for e in m["files"] if not os.path.exists(os.path.join(cs.DRIVE_C, e["rel"]))]
+    print("  files missing in the prefix now: %d%s" % (len(missing), (" (" + ", ".join(missing[:6]) + (", ..." if len(missing) > 6 else "") + ")") if missing else ""))
+    print("RESULT: vault %s" % ("OK" if not probs else "DAMAGED (save it again from a working prefix)"))
+    return 0 if not probs else 3
+
+
+def cmd_vault_save(quiet=False):
+    """Read-only in the prefix. -> exit code."""
+    say = (lambda *_a: None) if quiet else print
+    probs = connector_source_problems(cs.DRIVE_C)
+    if probs:
+        say("REFUSED: the connector in %s cannot be saved: %s" % (cs.DRIVE_C, "; ".join(probs)))
+        return 3
+    if not os.path.isfile(cs.ORIG) or cs.sha(cs.ORIG) != cs.ORIG_SHA:
+        say("REFUSED: %s missing or not the known D-BOX original (every livemotion.crt is stored as it)." % cs.ORIG)
+        return 3
+    parent = os.path.dirname(VAULT.rstrip("/\\"))
+    os.makedirs(parent, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    tmp = unique_dir(os.path.join(parent, ".connector.new_" + stamp))
+    files = []
+    try:
+        for d in CONNECTOR_DIRS:
+            src = os.path.join(cs.DRIVE_C, d)
+            if not os.path.isdir(src):
+                continue
+            for root, dirs, names in os.walk(src):
+                dirs[:] = [x for x in dirs if not x.startswith(".")]
+                for n in sorted(names):
+                    if _vault_skip(n):
+                        continue
+                    sp = os.path.join(root, n)
+                    if os.path.islink(sp) or not os.path.isfile(sp):
+                        continue
+                    rel = os.path.relpath(sp, cs.DRIVE_C).replace("\\", "/")
+                    dp = os.path.join(tmp, rel)
+                    os.makedirs(os.path.dirname(dp), exist_ok=True)
+                    shutil.copyfile(cs.ORIG if n.lower() == "livemotion.crt" else sp, dp)
+                    files.append({"rel": rel, "sha256": cs.sha(dp), "size": os.path.getsize(dp)})
+        with open(os.path.join(tmp, VAULT_MANIFEST), "w") as f:
+            json.dump({"tool": "sc_lmcert", "version": VERSION, "saved": time.strftime("%Y-%m-%d %H:%M:%S"),
+                       "source": "prefix" if os.name != "nt" else "Windows", "files": files}, f, indent=1)
+        old = None
+        if os.path.exists(VAULT):
+            old = os.path.join(parent, "connector.prev_" + stamp)
+            n = 1
+            while os.path.exists(old):
+                n += 1
+                old = os.path.join(parent, "connector.prev_%s_%d" % (stamp, n))
+            os.rename(VAULT, old)
+        os.rename(tmp, VAULT)
+    except OSError as e:
+        shutil.rmtree(tmp, ignore_errors=True)
+        say("FAILED: vault save: %s" % e)
+        return 6
+    say("vault saved: %s (%d files)%s" % (VAULT, len(files), ("; previous vault kept as " + old) if old else ""))
+    say("RESULT: vault saved")
+    return 0
+
+
+def vault_restore_missing(record):
+    """Create the vault's files that are missing in the prefix (never overwrites). -> number created,
+    or None when the vault is unusable. Appends created paths to record."""
+    if vault_problems():
+        return None
+    made = 0
+    for e in vault_manifest()["files"]:
+        dst = os.path.join(cs.DRIVE_C, e["rel"])
+        if os.path.lexists(dst):
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        tmp = os.path.join(os.path.dirname(dst), "." + os.path.basename(dst) + ".sc_tmp")
+        shutil.copyfile(os.path.join(VAULT, e["rel"]), tmp)
+        if os.path.lexists(dst):          # appeared meanwhile: never overwrite
+            os.remove(tmp)
+            continue
+        os.replace(tmp, dst)
+        record.append({"path": dst, "from": "vault", "sha256": cs.sha(dst)})
+        made += 1
+    return made
+
+
+def write_record(tag, record):
+    if not record:
+        return None
+    bdir = unique_dir(os.path.join(cs.BACKUP, time.strftime("%Y%m%d_%H%M%S") + "_" + tag))
+    with open(os.path.join(bdir, "manifest.json"), "w") as f:
+        json.dump({"tool": "sc_lmcert", "version": VERSION, "action": tag, "created": record}, f, indent=1)
+    return bdir
+
+
+def cmd_vault_restore():
+    g = cs.game_pids()
+    if g:
+        print("REFUSED: StarCitizen.exe is running (pids %s). Quit the game first." % ",".join(g))
+        return 2
+    probs = vault_problems()
+    if probs:
+        print("REFUSED: vault not usable: %s" % "; ".join(probs))
+        return 3
+    record = []
+    n = vault_restore_missing(record)
+    rec = write_record("vault_restore", record)
+    for r in record:
+        print("  created     %s" % cs.rel(r["path"]))
+    print("RESULT: vault restore - %d missing files created%s" % (n, ("; record in " + rec) if rec else " (nothing was missing)"))
+    return 0
+
+
 # ---------------------------------------------------------------- commands
 def cmd_status():
     print("sc_lmcert %s status (read-only)" % VERSION)
@@ -199,6 +413,10 @@ def cmd_status():
     for p, s in prefix_states(custom_sha):
         mark = "  <- may be read by the connector" if os.path.abspath(p) in [os.path.abspath(x) for x in read_paths()] else ""
         print("    [%s] %s%s" % (s, cs.rel(p), mark))
+    for p, s in read_states(custom_sha):
+        if s in ("missing", "folder missing"):
+            print("    [%s] %s  <- may be read by the connector; repair restores it" % (s.upper(), cs.rel(p)))
+    print("  vault: %s" % ("OK (%s)" % VAULT if not vault_problems() else "; ".join(vault_problems())))
     st = newest("new_")
     pv = newest("prev_")
     print("  staged (newest): %s" % (st or "none"))
@@ -232,7 +450,9 @@ def cmd_check():
             what = "D-BOX original" if cs.sha(rp) == cs.ORIG_SHA else "unknown content"
             problems.append("copy is %s, not ~/lm.crt (game/D-BOX update?): %s" % (what, cs.rel(rp)))
     if problems:
-        print("LMCERT FAIL: " + "; ".join(problems + warns))
+        hint = ("repair restores missing copies; vault available" if not vault_problems()
+                else "repair restores a missing copy whose folder exists; no usable vault")
+        print("LMCERT FAIL: " + "; ".join(problems + warns) + " (" + hint + ")")
         return 10
     if warns:
         print("LMCERT WARN: " + "; ".join(warns))
@@ -438,7 +658,7 @@ def cmd_selftest():
     return 0
 
 
-def cmd_footprint(mode):
+def cmd_footprint(mode, result="RESULT"):
     g = cs.game_pids()
     if g:
         print("REFUSED: StarCitizen.exe is running (pids %s)." % ",".join(g))
@@ -479,10 +699,89 @@ def cmd_footprint(mode):
         fails += 0 if ok else 1
         print("  %s %-15s %s" % ("written    " if ok else "VERIFY FAIL", label, cs.rel(p)))
     if fails:
-        print("RESULT: %d copies failed verification; backup in %s" % (fails, bdir))
+        print("%s: %d copies failed verification; backup in %s" % (result, fails, bdir))
         return 6
-    print("RESULT: footprint %s - custom in %d of %d copies" % (mode, n_custom, len(states)))
+    print("%s: footprint %s - custom in %d of %d copies" % (result, mode, n_custom, len(states)))
     return 0
+
+
+def cmd_repair():
+    """Restore what an update removed, then footprint all. One line per connector copy."""
+    g = cs.game_pids()
+    if g:
+        print("REFUSED: StarCitizen.exe is running (pids %s). Quit the game first." % ",".join(g))
+        return 2
+    if not os.path.isfile(CRT):
+        print("REFUSED: %s missing." % CRT)
+        return 3
+    if not os.path.isfile(cs.ORIG) or cs.sha(cs.ORIG) != cs.ORIG_SHA:
+        print("REFUSED: %s missing or not the known D-BOX original." % cs.ORIG)
+        return 3
+    csha = cs.sha(CRT)
+    before = dict(read_states(csha))
+    record = []
+    vault_ok = not vault_problems()
+    if vault_ok:
+        n = vault_restore_missing(record)
+        if n:
+            print("  vault: %d missing connector files created" % n)
+    for p, s in read_states(csha):
+        if s == "missing":
+            ok = put(CRT, p, 0o644)
+            record.append({"path": p, "from": "~/lm.crt", "sha256": cs.sha(p)})
+            print("  %s custom          %s (was missing)" % ("created    " if ok else "VERIFY FAIL", cs.rel(p)))
+            if not ok:
+                write_record("repair_restore", record)
+                return 6
+    gone = [p for p, s in read_states(csha) if s == "folder missing"]
+    if gone:
+        rec = write_record("repair_restore", record)
+        print("REFUSED: connector folder missing (game or D-BOX reinstall?): %s" % ", ".join(cs.rel(os.path.dirname(p)) for p in gone))
+        if os.name == "nt":
+            print("  Reinstall or start D-BOX HaptiSync once so it recreates LiveMotion, then run repair again.")
+        else:
+            print("  No usable vault to rebuild it from. From a prefix where it still works: "
+                  "env SC_CERT_DRIVE_C=/path/to/that/prefix/drive_c python3 ~/sc_lmcert.py vault save; "
+                  "then python3 ~/sc_lmcert.py repair. Or run the installer's apply (it copies "
+                  "LiveMotionConnector to StarCitizen when only that folder is missing).")
+        if rec:
+            print("  record of the files created so far: %s" % rec)
+        return 4
+    rc = cmd_footprint("all", result="  footprint")
+    rec = write_record("repair_restore", record)
+    after = read_states(csha)
+    print("copies the connector may read:")
+    for p, s in after:
+        was = before.get(p)
+        note = "" if was == s else " (was %s)" % short_state(was)
+        print("  %-15s %s%s" % (short_state(s), cs.rel(p), note))
+    if rec:
+        print("record of created files: %s" % rec)
+    if rc != 0:
+        return rc
+    saved = ""
+    if vault_problems() and not connector_source_problems(cs.DRIVE_C):
+        saved = "; vault saved" if cmd_vault_save(quiet=True) == 0 else "; vault NOT saved (run: vault save)"
+    names = ", ".join("%s %s" % (os.path.basename(os.path.dirname(p)), short_state(s)) for p, s in after)
+    print("RESULT: repair - %s%s" % (names, saved))
+    return 0 if all(short_state(s) == "custom" for _p, s in after) else 6
+
+
+def _writing(fn):
+    """Run a command that writes into the prefix; a permission error becomes a plain message."""
+    try:
+        return fn()
+    except PermissionError as e:
+        where = getattr(e, "filename", None) or str(e)
+        print("REFUSED: no permission to write %s" % where)
+        if os.name == "nt":
+            print("  Writing under C:\\ProgramData\\D-BOX needs an administrator PowerShell. Close the game, "
+                  "open PowerShell with 'Run as administrator' and run: py -3 \"%s\" lmcert %s" % (
+                      os.path.join(os.path.dirname(os.path.abspath(__file__)), "sc_cert_win.py"),
+                      " ".join(sys.argv[1:]) or "repair"))
+        else:
+            print("  Check who owns the prefix folder (it must be you, not root); never run this with sudo.")
+        return 11
 
 
 def main(a):
@@ -499,9 +798,11 @@ def main(a):
     if len(a) == 2 and a[1] == "selftest":
         return cmd_selftest()
     if len(a) == 2 and a[1] == "repair":
-        return cmd_footprint("all")
+        return _writing(cmd_repair)
+    if len(a) == 3 and a[1] == "vault" and a[2] in ("status", "save", "restore"):
+        return _writing({"status": cmd_vault_status, "save": cmd_vault_save, "restore": cmd_vault_restore}[a[2]])
     if len(a) == 3 and a[1] == "footprint" and a[2] in ("minimal", "all"):
-        return cmd_footprint(a[2])
+        return _writing(lambda: cmd_footprint(a[2]))
     print(__doc__)
     return 1
 

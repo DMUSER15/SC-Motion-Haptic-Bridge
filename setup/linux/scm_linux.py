@@ -13,7 +13,7 @@ Paths the runtime scripts use (env variable, else the location saved by apply in
 On a machine where those defaults are wrong, the installer writes the menu entry with the
 env variables set, and prints `set -Ux` lines for fish so manual commands work too.
 """
-import glob, json, os, shutil
+import glob, json, os, shutil, sys
 
 HOME = os.path.expanduser("~")
 USER = os.path.basename(HOME)
@@ -228,35 +228,15 @@ def full_env(game_prefix, shdir):
     return e
 
 
-def _base(arg):
-    return arg.replace("\\", "/").rsplit("/", 1)[-1].lower()
+_COMMON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "common")
+if _COMMON not in sys.path:
+    sys.path.append(_COMMON)
+import scm_proc as _PR  # noqa: E402  the one process-matching rule (setup/common)
 
-
-def _program(argv):
-    first = _base(argv[0])
-    if first.startswith("python"):
-        for a in argv[1:]:
-            if not a.startswith("-"):
-                return _base(a)
-    return first
-
-
-def scan(*needles):
-    """[(pid, cmdline)] of processes whose program is one of needles (same rule as sc_start.py)."""
-    me = os.getpid()
-    hits = []
-    for d in os.listdir("/proc"):
-        if not d.isdigit() or int(d) == me:
-            continue
-        try:
-            with open("/proc/%s/cmdline" % d, "rb") as f:
-                raw = f.read()
-        except OSError:
-            continue
-        argv = [a.decode("utf-8", "replace") for a in raw.split(b"\0") if a]
-        if argv and _program(argv) in needles:
-            hits.append((int(d), " ".join(argv)))
-    return hits
+_base = _PR.base
+_program = _PR.program
+scan = _PR.scan          # [(pid, cmdline)] of processes whose program is one of needles
+wine_state = _PR.wine_state
 
 
 def which(name):

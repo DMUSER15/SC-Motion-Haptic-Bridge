@@ -20,6 +20,8 @@
   "scripts/sc_haptics_install.py": "~/sc_haptics_install.py",
   "scripts/sc_lmcert.py": "~/sc_lmcert.py",
   "scripts/sc_motion_clean.py": "~/sc_motion_clean.py",
-  "scripts/sc_start.py": "~/sc_start.py"
+  "scripts/sc_start.py": "~/sc_start.py",
+  "scripts/scm_errlog.py": "~/scm_errlog.py",
+  "scripts/scm_taps.py": "~/scm_taps.py"
  }
 }

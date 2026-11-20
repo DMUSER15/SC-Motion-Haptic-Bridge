@@ -16,11 +16,15 @@ DBOX_ORIG_SHA = os.environ.get(
 CERT_NAME = "LiveMotionComm"
 CERT_DAYS = 3650
 SIMDEF_UUID = "2f10c0be-479b-4b35-8671-a1b16ce4b874"
-PORT_CAPTURE_TCP = 61666
-PORT_TEE_UDP = 61700
-PORT_PLUGIN_UDP = 61701
-PORT_BRIDGE_UDP = 61702
-PORT_SIMHUB_UDP = 30777
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import scm_ports as _P  # noqa: E402  the one port table
+
+PORT_CAPTURE_TCP = _P.CAPTURE_TCP
+PORT_TEE_UDP = _P.TEE_UDP
+PORT_PLUGIN_UDP = _P.PLUGIN_UDP
+PORT_BRIDGE_UDP = _P.BRIDGE_UDP
+PORT_SIMHUB_UDP = _P.SIMHUB_UDP
 LM_PARTS = ("ProgramData", "D-BOX", "Gaming", "LiveMotion")
 DBOX_ROOTS = (("ProgramData", "D-BOX"), ("Program Files", "D-BOX"))
 SERVER_SCRIPT = "SC_Motion_Server.py"     # the capture server (lm_server2.py before kit 1.4)
@@ -48,6 +52,64 @@ def connector_dir(drive_c):
 
 def game_dir(drive_c):
     return os.path.join(lm_root(drive_c), "StarCitizen")
+
+
+def connector_state(drive_c):
+    """Is D-BOX's connector usable in this prefix? -> (ok, detail).
+    The game loads dbxLive64.dll from LiveMotion\\StarCitizen; the connector reads its settings
+    (LiveMotionConnector.config) and certificate from LiveMotion\\LiveMotionConnector. HaptiSync's
+    installer puts the program in LiveMotionConnector and the installer copies it to StarCitizen;
+    a working prefix may have it in StarCitizen only (the minimal set, 2026-10-21). So: the program
+    (not 0 bytes) in either folder, and the settings file in LiveMotionConnector."""
+    lmc, game = connector_dir(drive_c), game_dir(drive_c)
+    have = [os.path.basename(d) for d in (game, lmc)
+            if os.path.isfile(os.path.join(d, "dbxLive64.dll")) and os.path.getsize(os.path.join(d, "dbxLive64.dll")) > 0]
+    cfg = os.path.isfile(os.path.join(lmc, "LiveMotionConnector.config"))
+    if have and cfg:
+        return True, "connector program in %s; settings in LiveMotionConnector" % " and ".join(have)
+    miss = []
+    if not have:
+        miss.append("dbxLive64.dll (missing or 0 bytes in StarCitizen and LiveMotionConnector)")
+    if not cfg:
+        miss.append("LiveMotionConnector/LiveMotionConnector.config")
+    return False, "missing: " + "; ".join(miss)
+
+
+def connector_copy_states(drive_c, custom_crt):
+    """The two livemotion.crt copies the connector may read (same rule as sc_lmcert.py check):
+    [(folder name, path, state)], state = custom | D-BOX original | other | missing | folder missing."""
+    csha = sha256(custom_crt) if custom_crt and os.path.isfile(custom_crt) else None
+    out = []
+    for d in (connector_dir(drive_c), game_dir(drive_c)):
+        p = os.path.join(d, "livemotion.crt")
+        if os.path.isfile(p):
+            h = sha256(p)
+            st = "custom" if csha and h == csha else ("D-BOX original" if h == DBOX_ORIG_SHA else "other")
+        else:
+            st = "missing" if os.path.isdir(d) else "folder missing"
+        out.append((os.path.basename(d), p, st))
+    return out
+
+
+def footprint_todo(drive_c, custom_crt, tool_cmd):
+    """Installer footprint step after a failed check: (state, detail) naming every copy by state,
+    so a missing copy is never reported as "D-BOX's original"."""
+    states = connector_copy_states(drive_c, custom_crt)
+    csha = sha256(custom_crt) if custom_crt and os.path.isfile(custom_crt) else None
+    read = {os.path.normcase(os.path.abspath(p)) for _n, p, _s in states}
+    extra = [p for p in dbox_cert_copies(drive_c) if os.path.normcase(os.path.abspath(p)) not in read]
+    unknown = [p for p in extra if sha256(p) not in (DBOX_ORIG_SHA, csha)]
+    unknown += [p for _n, p, s in states if s == "other"]
+    desc = ", ".join("%s %s" % (n, s) for n, _p, s in states)
+    n_orig = sum(1 for p in extra if sha256(p) == DBOX_ORIG_SHA)
+    if n_orig:
+        desc += "; %d other cop%s D-BOX original" % (n_orig, "y" if n_orig == 1 else "ies")
+    if unknown:
+        return "BLOCKED", "copies with unknown content: %s" % ", ".join(unknown)
+    missing = [p for _n, p, s in states if s in ("missing", "folder missing")]
+    if missing:
+        desc += "; missing: " + ", ".join(missing)
+    return "TODO", "%s -> %s" % (desc, tool_cmd)
 
 
 def dbox_cert_copies(drive_c):
@@ -351,3 +413,54 @@ class Report:
             c = self.counts()
             f.write("\n%s\n" % json.dumps(c))
         return p
+
+
+# ---------------------------------------------------------------- error and crash logs
+_ERRLOG = []
+
+
+def errlog():
+    """scripts/scm_errlog.py of this repository (or the copy next to an installed scm_common.py),
+    or None when it is not there (an older install). Imported once."""
+    if not _ERRLOG:
+        mod = None
+        here = os.path.dirname(os.path.abspath(__file__))
+        for d in (here, os.path.join(os.path.dirname(os.path.dirname(here)), "scripts")):
+            if os.path.isfile(os.path.join(d, "scm_errlog.py")):
+                if d not in sys.path:
+                    sys.path.append(d)
+                try:
+                    import scm_errlog as mod  # noqa: F811
+                except Exception:  # noqa: BLE001
+                    mod = None
+                break
+        _ERRLOG.append(mod)
+    return _ERRLOG[0]
+
+
+def errlog_run(program, fn, argv):
+    """fn(argv) with an error log: an uncaught error is explained in plain English and kept as
+    a log (at most 5). A normal non-zero result (TODO, FAIL) is not an error of the program."""
+    el = errlog()
+    if el is not None:
+        el.start(program)
+    code = None
+    try:
+        return fn(argv)
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except BaseException as e:  # noqa: BLE001  recorded, then shown as usual
+        code = 1
+        if el is not None:
+            el.report("crash", e)
+        raise
+    finally:
+        if el is not None:
+            el.finish(code)
+
+
+def errlog_report(level, text):
+    """Record a problem in the running error log (no-op without one)."""
+    el = errlog()
+    if el is not None and el.current() is not None:
+        el.report(level, text=text)

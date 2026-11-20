@@ -77,6 +77,13 @@ SEATW = env_f("LM_SEATW", "0.25")
 FADE = env_f("LM_FADE", "0.5")
 
 
+def frame_ok(d):
+    """True when Path.raw() can read this vehicle frame: each vector it uses (ev3 id40 or LM_SRC,
+    id35, id9) is a list of 3 where present. Numbers that are not finite are left to raw()'s glitch
+    hold, as before. A frame failing this is skipped by run()'s receive loop (it used to stop it)."""
+    return all(isinstance(d[k], list) and len(d[k]) == 3 for k in (SRC, 35, 9) if k in d)
+
+
 class Path:
     """Signal path: frame dict -> 9 output floats. No I/O. (Same as lm_simhub2.)"""
 
@@ -280,23 +287,47 @@ def run(show):
     except OSError as e:
         sys.exit("cannot bind UDP %d (%s). Another process holds it: run  ss -ulpn | grep %d  and kill that pid" % (IN_PORT, e, IN_PORT))
 
+    bad = {"n": 0}
+
     def rx_loop():
+        # one malformed post is skipped and counted (before, it ended this thread for good);
+        # well-formed posts are handled exactly as before
         while True:
-            data, _ = rx.recvfrom(65535)
+            try:
+                data, _ = rx.recvfrom(65535)
+            except OSError as ex:
+                print("bridge: receive error (%s); telemetry input stopped, output ramps to 0" % ex, flush=True)
+                return
             try:
                 p = json.loads(data)
             except Exception:
                 continue
-            e = p.get("ev")
-            now = time.time()
-            if e == 3:
-                with lock:
-                    st["d"] = dict(zip(p["m"], p["v"]))
-                    st["t"] = now
-            elif e in (10, 2):
-                m, v = p.get("m") or [], p.get("v") or []
-                with lock:
-                    seat.on_event(e, dict(zip(m, v)) if len(m) == len(v) else {}, now)
+            try:
+                if not isinstance(p, dict):
+                    raise ValueError("post is not a JSON object")
+                e = p.get("ev")
+                now = time.time()
+                if e == 3:
+                    if not isinstance(p["m"], list) or not isinstance(p["v"], list):
+                        raise ValueError("\"m\" or \"v\" is not a list")
+                    d = dict(zip(p["m"], p["v"]))
+                    if not frame_ok(d):
+                        raise ValueError("vehicle frame with a vector that is not a list of 3 values")
+                    with lock:
+                        st["d"] = d
+                        st["t"] = now
+                elif e in (10, 2):
+                    m, v = p.get("m") or [], p.get("v") or []
+                    if not isinstance(m, list) or not isinstance(v, list):
+                        raise ValueError("\"m\" or \"v\" is not a list")
+                    d = dict(zip(m, v)) if len(m) == len(v) else {}
+                    with lock:
+                        seat.on_event(e, d, now)
+            except Exception as ex:  # noqa: BLE001  never let one post stop telemetry input
+                bad["n"] += 1
+                if bad["n"] in (1, 10, 100, 1000) or bad["n"] % 10000 == 0:
+                    print("bridge: skipped malformed post #%d (%s: %s)" % (bad["n"], type(ex).__name__, str(ex)[:80]),
+                          flush=True)
 
     threading.Thread(target=rx_loop, daemon=True).start()
     path = Path()

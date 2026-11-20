@@ -15,7 +15,7 @@ import hashlib, json, os
 # lm_simhub3t.py stays for SC_BRIDGE_SCRIPT=~/lm_simhub3t.py (motion fields only).
 RUNTIME = ("sc_start.py", "SC_Motion_Server.py", "motion_desc.bin", "lm_simhub3.py", "lm_simhub3t.py",
            "lm_simhub4.py", "lm_simhub4t.py", "sc_fx.py",
-           "sc_lmcert.py", "sc_certswap.py", "sc_haptics_install.py", "sc_motion_clean.py")
+           "sc_lmcert.py", "sc_certswap.py", "sc_haptics_install.py", "sc_motion_clean.py", "scm_errlog.py", "scm_taps.py")
 # Linux only (the Windows installer does not copy these)
 LINUX_ONLY = ("sc_motion_clean.py",)
 INSTALL_PLUGIN = ("plugin/effects.default.json", "config/effects.json")
