@@ -4,6 +4,7 @@ check it, start SimHub, wait for the rig, then start the RSI Launcher.
 
     py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py         start everything
     py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py stop    stop a capture server / bridge left running
+    py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py rollback    undo the newest update (asks first)
 
 Same order and checks as sc_start.py on Linux, reusing its helpers (imported unchanged):
   0  update check (scm_update.py): newer public release? Pause only then; [u]pdate replaces
@@ -105,10 +106,13 @@ def run_lmcert(action):
 def patch():
     """Point the imported sc_start helpers at Windows equivalents and our paths."""
     S.scan = winproc.scan
+    S.PROCESSES = lambda: [(pid, argv) for pid, _name, argv in winproc.processes()]
+    S.ADDON_BRIDGE_DIR = _CFG.get("repo") if _CFG.get("repo") and os.path.isdir(_CFG.get("repo")) else HERE
     S.listening = winproc.listening
     S.stop_proc = stop_proc
     S.stop_pid = stop_pid
     S.run_lmcert = run_lmcert
+    S.CERT_TOOL_CMD = 'py -3 "%s" lmcert' % CERT_WIN
     S.LOG_DIR = LOG_DIR
     S.CAPTURE_SCRIPT = CAPTURE_SCRIPT
     S.CAPTURE_CMD = [sys.executable, "-u", CAPTURE_SCRIPT]
@@ -126,6 +130,9 @@ def cmd_stop():
         for pid, cmd in S.scan(*needles):
             S.say("stopping %s (pid %d)" % (name, pid))
             stop_pid(pid, name)
+    for pid, name in S.addon_leftovers():
+        S.say("stopping add-on %s (pid %d)" % (name, pid))
+        stop_pid(pid, "add-on %s" % name)
     S.say("done; SimHub and the RSI Launcher left running")
 
 
@@ -181,6 +188,10 @@ def main():
         for pid, cmd in S.scan(*needles):
             S.say("stopping leftover %s (pid %d)" % (name, pid))
             stop_pid(pid, name)
+    addons = S.addon_commands()
+    for pid, name in S.addon_leftovers(addons):
+        S.say("stopping leftover add-on %s (pid %d)" % (name, pid))
+        stop_pid(pid, "add-on %s" % name)
     busy_tcp = S.listening("tcp", S.CAPTURE_PORT_TCP)
     busy_udp = S.listening("udp", S.BRIDGE_PORT_UDP)
     if busy_tcp or busy_udp:
@@ -209,6 +220,8 @@ def main():
         if ok is False:
             S.fail("bridge self-test failed: " + msg)
         S.say(("bridge self-test passed: " if ok else "bridge self-test: ") + msg)
+
+    S.start_addons(addons)   # add-ons (taps with a run command), after the self-test
 
     dll = os.path.join(SIMHUB_DIR, "SCHaptics.dll")
     if os.path.exists(dll):
@@ -264,6 +277,7 @@ def main():
         S.say("REMINDER: a certificate check failed at start-up; motion telemetry may be disabled. "
               "If the game does not connect: py -3 sc_cert_win.py lmcert status")
     warned = False
+    addons_warned = set()
     seen = game_running
     stop_at = None
     while True:
@@ -272,7 +286,9 @@ def main():
             which = "bridge" if brg.poll() is not None else "capture server"
             S.say("WARNING: the %s has stopped; motion output has stopped. Start this again to "
                   "restart it (the game keeps running)." % which)
+            S.child_stopped(brg, "bridge", brg_log) if which == "bridge" else S.child_stopped(srv, "capture server", srv_log)
             warned = True
+        addons_warned = S.check_addons(addons_warned)
         now = bool(S.scan(S.GAME_EXE))
         if now:
             if stop_at is not None:
@@ -293,14 +309,15 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["stop"]:
         cmd_stop()
         sys.exit(0)
+    if sys.argv[1:] == ["rollback"]:
+        import scm_update  # noqa: E402  (installed next to this file)
+        sys.exit(scm_update.rollback("windows", _CFG.get("repo"), HOME, S.say,
+                                     game_running=lambda: bool(S.scan(S.GAME_EXE)),
+                                     simhub_running=lambda: bool(S.scan(S.SIMHUB_NEEDLE)),
+                                     install_dir=HERE, simhub_dir=SIMHUB_DIR))
     if sys.argv[1:]:
         sys.exit(__doc__)
-    try:
-        main()
-    except KeyboardInterrupt:
-        print()
-        S.say("interrupted")
-    finally:
+    def closing():
         S.cleanup()
         S.say("bridge and capture server stopped; SimHub and the RSI Launcher left running")
         if os.environ.get("SC_START_HOLD") == "1" and sys.stdin.isatty():
@@ -308,3 +325,5 @@ if __name__ == "__main__":
                 input("Press Enter to close this window. ")
             except (EOFError, KeyboardInterrupt):
                 pass
+
+    S.run_logged("sc_start_win", main, closing)

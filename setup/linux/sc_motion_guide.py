@@ -167,7 +167,7 @@ def guide_dbox(g, installer, option):
     if not wine:
         g.step(2, "prefix", "BLOCKED", "%s: no usable wine_path in sc-launch.sh (LUG-Helper runner)" % pfx)
         return
-    if os.path.isfile(os.path.join(C.connector_dir(dc), "dbxLive64.dll")):
+    if C.connector_state(dc)[0]:
         g.step(2, "prefix", "DONE", "%s: D-BOX connector already installed; nothing to do" % pfx)
         print("\nNext: python3 setup/linux/sc_motion_install.py plan")
         return

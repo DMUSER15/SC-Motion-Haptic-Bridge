@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """sc_cert_win.py - run the unchanged sc_lmcert.py and sc_certswap.py on Windows.
 
-  py -3 sc_cert_win.py lmcert status|check|selftest|new [copy-subject]|activate|rollback|footprint minimal|all
+  py -3 sc_cert_win.py lmcert status|check|selftest|repair|new [copy-subject]|activate|rollback|footprint minimal|all
+  py -3 sc_cert_win.py lmcert vault status|save|restore
   py -3 sc_cert_win.py certswap status|original|custom
 
 Same commands, rules, backups and exit codes as on Linux (see those scripts). Differences:

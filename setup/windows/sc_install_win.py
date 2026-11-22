@@ -28,7 +28,7 @@ sc_verify_win.py use them), then runs the steps:
                     lm_simhub3(t).py, sc_fx.py, certificate tools) + Windows helpers copied to
                     %USERPROFILE%\\sc-motion
    7 footprint      every copy of livemotion.crt under C:\\ProgramData\\D-BOX and C:\\Program Files\\D-BOX
-                    = lm.crt (sc_cert_win.py lmcert footprint all; backups first). The connector
+                    = lm.crt (sc_cert_win.py lmcert repair: creates a missing copy, then footprint all; backups first). The connector
                     reads the LiveMotionConnector copy, so the StarCitizen copy alone is not enough
    8 simdef         SimHub's game definition "Star Citizen" (24 fields, data conversion revision 3):
                     config\\simhub\\Star Citizen.simdef copied to <SimHub>\\PluginsData\\Common\\
@@ -95,7 +95,8 @@ def files_to_install():
         out[n] = os.path.join(REPO, "scripts", n)
     for p in ("winproc.py", "winlocate.py", "sc_cert_win.py", "sc_start_win.py", "sc_verify_win.py"):
         out[p] = os.path.join(HERE, p)
-    for p in ("scm_common.py", "scm_checks.py", "scm_motion_hw.py", "scm_simdef.py", "scm_update.py"):
+    for p in ("scm_common.py", "scm_checks.py", "scm_motion_hw.py", "scm_simdef.py", "scm_update.py",
+              "scm_ports.py", "scm_proc.py"):
         out[p] = os.path.join(REPO, "setup", "common", p)
     out["scm_manifest.py"] = os.path.join(REPO, "tools", "scm_manifest.py")
     # the release record (version + file list) of a downloaded or cloned public release; the
@@ -155,9 +156,10 @@ def s_launcher():
 
 
 def s_dbox():
-    if os.path.isfile(os.path.join(C.connector_dir(DRIVE), "dbxLive64.dll")):
-        return "DONE", "LiveMotionConnector present"
-    return "BLOCKED", "install D-BOX HaptiSync Center (docs/INSTALL-WINDOWS.md)"
+    ok, det = C.connector_state(DRIVE)
+    if ok:
+        return "DONE", det
+    return "BLOCKED", det + ". Install D-BOX HaptiSync Center (docs/INSTALL-WINDOWS.md), or if it was there before an update: lmcert repair"
 
 
 def s_folder():
@@ -235,11 +237,10 @@ def s_footprint():
     rc, out = cert_tool("lmcert", "check")
     if rc in (0, 9):
         return "DONE", last(out)
-    copies = C.dbox_cert_copies(DRIVE)
-    known = (C.DBOX_ORIG_SHA, C.sha256(CRT))
-    if copies and all(C.sha256(p) in known for p in copies):
-        return "TODO", "some copies are D-BOX's original: lmcert footprint all"
-    return "BLOCKED", last(out) + "; run: py -3 %s lmcert status" % os.path.join(INSTALL, "sc_cert_win.py")
+    state, det = C.footprint_todo(DRIVE, CRT, "lmcert repair")
+    if state == "TODO":
+        return state, det
+    return "BLOCKED", det + "; " + last(out) + "; run: py -3 %s lmcert status" % os.path.join(INSTALL, "sc_cert_win.py")
 
 
 def s_simhub():
@@ -369,7 +370,7 @@ STEPS = [
     (4, "dbox-original", s_orig, lambda: C.backup_dbox_original(DRIVE, ORIG)),
     (5, "cert-pair", s_pair, lambda: C.bootstrap_pair(C.find_openssl(), CRT, KEY)),
     (6, "files", s_files, a_files),
-    (7, "footprint", s_footprint, writable(lambda: (lambda r: (r[0] == 0, last(r[1])))(cert_tool("lmcert", "footprint", "all")))),
+    (7, "footprint", s_footprint, writable(lambda: (lambda r: (r[0] == 0, last(r[1])))(cert_tool("lmcert", "repair")))),
     (8, "simdef", s_simdef, writable(lambda: SD.apply(simdef_place()))),
     (9, "plugin", s_plugin, writable(a_plugin)),
     (10, "effects", s_effects, a_effects),
@@ -465,6 +466,7 @@ def do_apply(opts):
             print("  %-3s %-14s %s %s" % (n, name, "done:" if ok else "FAILED:", res))
             if not ok:
                 print("Stopped at step %s. Nothing after it was changed." % n)
+                C.errlog_report("error", "installer step %s (%s) failed: %s" % (n, name, res))
                 break
     print()
     resolve(opts)
@@ -472,6 +474,9 @@ def do_apply(opts):
 
 
 def main(argv):
+    if len(argv) > 1 and argv[1] == "addon":      # optional add-ons (setup/common/scm_addons.py)
+        import scm_addons
+        return scm_addons.main(argv)
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("cmd", nargs="?")
     ap.add_argument("--rsi-launcher", dest="rsi_launcher")
@@ -500,4 +505,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(C.errlog_run("installer_win", main, sys.argv))

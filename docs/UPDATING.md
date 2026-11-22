@@ -62,4 +62,42 @@ After an update that touched setup files, you can run the verifier as usual (`sc
 
 ## Undo an update
 
-Copy the files from the backup folder back over the release folder (same relative paths), including `release.json`. If the game definition was replaced, rename `Star Citizen.simdef.bak-<time>` back in SimHub's `PluginsData/Common/ExternalSims` folder (SimHub closed). The next start offers the update again; answer `s`.
+```
+python3 ~/sc_start.py rollback
+```
+
+Windows: `py -3 $env:USERPROFILE\sc-motion\sc_start_win.py rollback`.
+
+It undoes the newest update. It first lists what it will do and asks; nothing changes until you answer `r` (and type `YES` when files that shape platform movement are involved).
+
+- Every file the update replaced comes back from its backup folder.
+- Files that were new in the update are moved out. Nothing is deleted: the newer versions go into a new folder `~/sc_motion_update_backup/<new>_back_to_<old>_<time>/`.
+- The same follow-up steps run as after an update: links, SimHub's game definition (the registered one is renamed to `.bak-<time>` first), the plugin rebuild. SimHub must be closed when the plugin or the game definition is involved; the game must not be running.
+- A git clone of the public repository is moved back to the older release tag (`git reset --keep`, which refuses to lose a local change).
+- Never touched: your `effects.json`, SimHub's settings and profiles, your certificates, your saved locations.
+
+Run it again to undo the rollback. Several updates are undone one after the other, newest first. The next start offers the update again; answer `s` to stay on the older version.
+
+After a rollback that changed platform movement values, treat the first ride like the first ride after an update (next section applies the same way).
+
+A developer checkout (your own git repository without `release.json`) is not handled by the launcher: use git there. Tag each state you may want to return to (`git tag -a NAME -m "..."`), and go back with `git checkout NAME`.
+
+## Optional add-ons
+
+An add-on is a separate program in its own repository that uses the bridge's telemetry. The bridge never needs one.
+
+```
+python3 setup/linux/sc_motion_install.py addon list
+python3 setup/linux/sc_motion_install.py addon install PATH-TO-ARCHIVE-OR-FOLDER
+python3 setup/linux/sc_motion_install.py addon update NAME PATH-TO-NEWER-ARCHIVE
+python3 setup/linux/sc_motion_install.py addon rollback NAME
+python3 setup/linux/sc_motion_install.py addon remove NAME
+```
+
+Windows: the same words after `py -3 setup\windows\sc_install_win.py addon`.
+
+Before anything is installed the package is checked: every file must match the sha256 in the package's `release.json`, nothing unlisted may be in it, archives may not contain links or paths outside their folder, the add-on must support this bridge's contract number, and its telemetry port must be in the add-on ranges. Then it asks. An add-on's own installer is a program from that package and runs as you: install only add-ons you trust.
+
+Add-ons live in `~/.local/share/sc-motion/addons/<name>/<version>/` (Windows `%LOCALAPPDATA%\sc-motion\addons`). The version before is kept, so `addon rollback NAME` goes back to it. Each add-on has its own version and is updated and rolled back separately from the bridge.
+
+An add-on that asks for telemetry writes a tap file (`~/.config/sc-motion/taps.d/<name>.json`) when it is installed and removes it when it is removed. From then on the normal start ("Start StarCitizen - Motion Enabled") sends it its copy and starts and stops it with the pipeline: no second menu entry is needed. `python3 ~/scm_taps.py` shows what the next start will do.

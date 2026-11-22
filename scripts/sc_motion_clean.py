@@ -22,7 +22,10 @@ Not touched: this repository and the links in your home folder, ~/lm.crt, ~/lm.k
 ~/livemotion.crt.orig, effects.json, recordings, SimHub's own settings (the "Star Citizen"
 game definition and its registration, ShakeIt effects, motion profile, COM ports), the D-BOX
 HaptiSync install itself (remove it with D-BOX's uninstaller in the game prefix if you want),
-and this menu entry.
+the connector vault (~/.local/share/sc-motion/connector, D-BOX's own files; sc_lmcert.py repair
+would rebuild the StarCitizen folder from it, so delete the vault too if you never want that),
+the error logs (~/.local/state/sc-motion/logs), add-ons and their tap files (remove those first
+with: sc_motion_install.py addon remove NAME) and this menu entry.
 To set everything up again: python3 <this repository>/setup/linux/sc_motion_install.py apply
 (it recreates the connector folder, certificate copies, plugin and menu entry).
 

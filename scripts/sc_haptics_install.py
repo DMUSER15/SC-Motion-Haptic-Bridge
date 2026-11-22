@@ -131,12 +131,35 @@ def remove():
     return 0
 
 
-if __name__ == "__main__":
-    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+def _main(argv):
+    cmd = argv[1] if len(argv) > 1 else ""
     if cmd == "check":
-        sys.exit(check())
+        return check()
     if cmd == "install":
-        sys.exit(install())
+        return install()
     if cmd == "remove":
-        sys.exit(remove())
-    sys.exit(__doc__)
+        return remove()
+    print(__doc__)
+    return 1
+
+
+if __name__ == "__main__":
+    try:  # error and crash logs (scm_errlog.py next to this file; optional)
+        sys.path.insert(0, os.path.dirname(os.path.realpath(os.path.abspath(__file__))))
+        import scm_errlog as EL
+    except Exception:  # noqa: BLE001
+        EL = None
+    if EL is None:
+        sys.exit(_main(sys.argv))
+    EL.start("haptics_install")
+    _code = None
+    try:
+        _code = _main(sys.argv)
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except BaseException as _e:  # noqa: BLE001
+        EL.report("crash", _e)
+        raise
+    finally:
+        EL.finish(None)          # a refusal (exit code) is a result, not an error of the program
+    sys.exit(_code)

@@ -5,6 +5,8 @@
 //   SCHaptics.Motor1..8.Amp (0..100)                                -> ShakeIt Motors (0.3.0)
 //   SCHaptics.Fx.<name> (0..100), SCHaptics.Contact.HP, SCHaptics.Shock.Lin / .Rot,
 //   SCHaptics.Hit.*, SCHaptics.Heart.BPM, SCHaptics.Config.* and the stage-1 feed properties.
+// 0.4.1: MiniJson refuses nesting deeper than 64 levels (a crafted datagram on UDP 61701
+//        could otherwise overflow the stack and end SimHub). No effect changes.
 // 0.4.0: intensity sliders on the left-menu page (master + one per effect) write the numbers
 // into effects.json in place (ConfigEdit.cs; a link stays a link, first write of a session
 // keeps a backup in <folder of effects.json>\backup) and reload it at once.
@@ -34,7 +36,7 @@ namespace StarCitizenHaptics
     [PluginName("SC Haptics")]
     public class SCHaptics : IPlugin, IDataPlugin, IWPFSettingsV2
     {
-        public const string Version = "0.4.0";
+        public const string Version = "0.4.1";
         public const int FeedPort = 61701;
         public const int NumEv = 20;           // ev 0..19 (telemetry schema)
         public const string ConfigEnv = "SC_HAPTICS_CONFIG";

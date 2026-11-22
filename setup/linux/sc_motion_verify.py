@@ -24,6 +24,7 @@ import glob, os, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 sys.path[:0] = [HERE, os.path.join(REPO, "setup", "common"), os.path.join(REPO, "tools")]
+sys.path.append(os.path.join(REPO, "scripts"))   # scm_taps (read-only use)
 import scm_common as C  # noqa: E402
 import scm_checks as K  # noqa: E402
 import scm_linux as L  # noqa: E402
@@ -151,10 +152,10 @@ def sec_dbox(R, gp):
         R.add("SKIP", "dbox", "D-BOX connector", "no game prefix")
         return
     dc = os.path.join(gp, "drive_c")
-    con = os.path.join(C.connector_dir(dc), "dbxLive64.dll")
-    R.add("PASS" if os.path.isfile(con) else "FAIL", "dbox", "HaptiSync connector installed",
-          "LiveMotionConnector present" if os.path.isfile(con) else "missing",
-          "install D-BOX HaptiSync Center in the game prefix (docs/INSTALL-LINUX.md)")
+    ok, det = C.connector_state(dc)
+    R.add("PASS" if ok else "FAIL", "dbox", "HaptiSync connector installed", det,
+          "game closed: python3 ~/sc_lmcert.py repair (restores it from the vault, if you have one); "
+          "else install D-BOX HaptiSync Center in the game prefix (docs/INSTALL-LINUX.md)")
     gdl = os.path.join(C.game_dir(dc), "dbxLive64.dll")
     miss = C.game_folder_missing(dc)
     R.add("PASS" if os.path.isfile(gdl) and not miss else "FAIL", "dbox", "StarCitizen connector folder",
@@ -296,6 +297,26 @@ def sec_runtime(R):
     names = sorted({L._program(c.split(" ")) for _, c in pipe})
     R.add("INFO", "runtime", "running now", "game %s, SimHub %s, pipeline %s" % (
         "yes" if game else "no", "yes" if simhub else "no", ", ".join(names) or "no"))
+    try:
+        import scm_taps
+        taps, notes = scm_taps.load()
+        R.add("INFO", "runtime", "add-on taps", ", ".join("%s UDP %d" % (t["name"], t["port"]) for t in taps) or "none")
+        for n in notes:
+            R.add("WARN", "runtime", "add-on tap file", n, "fix or remove the file in %s" % scm_taps.taps_dir())
+    except Exception as e:  # noqa: BLE001
+        R.add("INFO", "runtime", "add-on taps", "not checked (%s)" % e)
+    try:
+        import scm_addons
+        R.add("INFO", "runtime", "add-ons", scm_addons.summary() or "none installed (optional: sc_motion_install.py addon list)")
+    except Exception as e:  # noqa: BLE001  add-ons never fail the verifier
+        R.add("INFO", "runtime", "add-ons", "not checked (%s)" % e)
+    sh_state, sh_pids = L.wine_state(L.SIMHUB_EXE)
+    if sh_state == "stuck":
+        R.add("WARN", "runtime", "SimHub process stuck", "pid %s: its Wine server is gone (no window)" % ", ".join(map(str, sh_pids)),
+              "cabinet OFF, then: kill %s (the launcher also offers this)" % " ".join(map(str, sh_pids)))
+    if len(simhub) > 1 and sh_state == "running":
+        R.add("WARN", "runtime", "more than one SimHub", "%d SimHubWPF.exe processes" % len(simhub),
+              "close SimHub and check with: pgrep -af SimHubWPF (a second one can hold the plugin's UDP port)")
     if blk:
         R.add("WARN", "runtime", "test/replay tools running", "; ".join(c[:60] for _, c in blk),
               "sc_start.py refuses to start while these run")
@@ -362,4 +383,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(C.errlog_run("verify", main, sys.argv))

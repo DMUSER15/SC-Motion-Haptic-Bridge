@@ -87,9 +87,9 @@ def main(argv):
     R.add("PASS" if os.path.isfile(exe) else "WARN", "game", "Star Citizen LIVE", exe,
           "install LIVE, or set SC_LIVE_DIR to your library's LIVE folder")
     # dbox
-    con = os.path.join(C.connector_dir(DRIVE), "dbxLive64.dll")
-    R.add("PASS" if os.path.isfile(con) else "FAIL", "dbox", "HaptiSync connector installed",
-          "present" if os.path.isfile(con) else "missing", "install D-BOX HaptiSync Center")
+    ok, det = C.connector_state(DRIVE)
+    R.add("PASS" if ok else "FAIL", "dbox", "HaptiSync connector installed", det,
+          "install D-BOX HaptiSync Center, or after an update: lmcert repair (elevated)")
     miss = C.game_folder_missing(DRIVE)
     ok = miss == [] and os.path.isfile(os.path.join(C.game_dir(DRIVE), "dbxLive64.dll"))
     R.add("PASS" if ok else "FAIL", "dbox", "StarCitizen connector folder", "complete" if ok else "missing %s" % (miss or "folder"),
@@ -155,6 +155,11 @@ def main(argv):
     simhub = winproc.scan("simhubwpf.exe")
     R.add("INFO", "runtime", "running now", "game %s, SimHub %s, pipeline %s" % (
         "yes" if game else "no", "yes" if simhub else "no", "yes" if pipe else "no"))
+    try:
+        import scm_addons
+        R.add("INFO", "runtime", "add-ons", scm_addons.summary() or "none installed (optional)")
+    except Exception:  # noqa: BLE001  add-ons never fail the verifier (not copied to the install folder)
+        pass
     rc = 0
     if "--live" in args:
         if game or simhub or pipe:
@@ -176,4 +181,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(C.errlog_run("verify_win", main, sys.argv))
