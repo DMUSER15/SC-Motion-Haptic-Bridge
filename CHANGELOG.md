@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.1-alpha
+
+> **Windows: still untested on a real PC.** Tested on Linux with Windows stand-ins only (simulated user folders, stand-in SimHub and RSI Launcher). No motion file changed since 0.2.0-alpha; from 0.1.1-alpha the 0.2.0 motion warning applies.
+
+### Control window on Windows (new)
+- Start menu **Star Citizen Motion - Control window**: the same window as on Linux, driving the installed Windows launcher (`%USERPROFILE%\sc-motion\sc_start_win.py`) step by step. SimHub and the RSI Launcher are started directly; no Wine card.
+- Installer step 13 installs PySide6 for your user (pip) and adds the Start menu entry. An install updated from 0.1.1 gets the entry from the terminal launcher at its next start; the window offers to install PySide6 when it is missing.
+- Updates from the window also copy the runtime files into `%USERPROFILE%\sc-motion` and update SimHub's game definition / plugin, like the terminal launcher's update.
+- `sc_start_win.py gui` opens the window from a terminal.
+
+### Fixes
+- Control window: no longer crashes right after opening on Windows (`signal.SIGHUP` does not exist there).
+- Windows launcher: SimHub is detected on Windows (0.2.0 asked Linux's `/proc`, so the window would have seen "not running" and started a second SimHub).
+- Update check: no crash when the window has no console (`pythonw.exe`) and a follow-up step needs you.
+- Git clones of `main` update again: this release is built on top of `main` (0.2.0-alpha was not, so `git merge --ff-only` refused).
+- `docs/CONTROL-WINDOW.md`: removed the stale "private for now" note.
+
 ## 0.2.0-alpha
 
 > **Windows: largely untested — use at your own risk.** Everything below is included for Windows where it applies, but this release has not been run on a real Windows PC with a motion platform. The motion path (capture server, tee, bridge) has changed since 0.1.1-alpha and platform movement on Windows **MAY** have changed. Treat the first Windows start as a first run (nobody in the rig, motion power OFF, SimHub motion OFF) and start with low SimHub settings.

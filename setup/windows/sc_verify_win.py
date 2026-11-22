@@ -150,6 +150,10 @@ def main(argv):
                        "Start StarCitizen - Motion Enabled.lnk")
     if os.name == "nt":
         R.add("PASS" if os.path.isfile(lnk) else "WARN", "launch", "Start menu entry", lnk, "Install-SCMotion.ps1 -Apply (step 11)")
+        clnk = os.path.join(os.environ.get("APPDATA", H), "Microsoft", "Windows", "Start Menu", "Programs",
+                            "Star Citizen Motion - Control window.lnk")
+        R.add("PASS" if os.path.isfile(clnk) else "WARN", "launch", "control window entry", clnk,
+              "Install-SCMotion.ps1 -Apply (step 13; optional, needs PySide6)")
     # runtime
     game = winproc.scan("starcitizen.exe")
     simhub = winproc.scan("simhubwpf.exe")

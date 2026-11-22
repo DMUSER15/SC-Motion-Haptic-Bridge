@@ -341,8 +341,10 @@ def public(rec):
 
 
 # ------------------------------------------------------------------ applying
-def apply(rec, say, game_running, simhub_running, home=HOME, platform="linux"):
-    """-> (ok, text, restart_needed). Changes only this app."""
+def apply(rec, say, game_running, simhub_running, home=HOME, platform="linux", install_dir=None, simhub_dir=None):
+    """-> (ok, text, restart_needed). Changes only this app. Windows: install_dir (the installed
+    runtime copies, %USERPROFILE%\\sc-motion) and simhub_dir are refreshed after the bridge update,
+    like the terminal launcher's update does."""
     if not rec.get("update"):
         return False, "%s: nothing to update" % rec["title"], False
     if rec.get("blocked"):
@@ -362,18 +364,25 @@ def apply(rec, say, game_running, simhub_running, home=HOME, platform="linux"):
         say("bridge: fast-forwarded to %s" % rec["available"])
         changes = [(p, role_of(p), "changed") for p in rec.get("_files", [])]
         failed = []
-        if platform == "linux":
-            try:
-                for ok2, txt in U.post_linux(rec["where"], home, changes, say):
-                    say(("  done: " if ok2 else "  NOT DONE: ") + txt)
-                    if not ok2:
-                        failed.append(txt)
-            except Exception as e:  # noqa: BLE001
-                failed.append("follow-up steps failed (%s)" % e)
+        try:
+            if platform == "linux":
+                steps = U.post_linux(rec["where"], home, changes, say)
+            elif install_dir and simhub_dir:
+                steps = U.post_windows(rec["where"], home, changes, install_dir, simhub_dir, say)
+            else:
+                steps = [(False, "install folder or SimHub folder unknown: run Install-SCMotion.ps1 -Apply")]
+            for ok2, txt in steps:
+                say(("  done: " if ok2 else "  NOT DONE: ") + txt)
+                if not ok2:
+                    failed.append(txt)
+        except Exception as e:  # noqa: BLE001
+            failed.append("follow-up steps failed (%s)" % e)
         return (not failed), ("bridge updated to %s" % rec["available"]) + ("; needs you: " + "; ".join(failed) if failed else ""), True
     if rec["id"] == "bridge":
+        if platform == "windows" and not (install_dir and simhub_dir):
+            return False, "bridge update NOT applied: install folder or SimHub folder unknown (run Install-SCMotion.ps1 -Apply)", False
         ok = U._apply(rec["_loc"], rec["_loc"]["root"], home, rec["_tag"], rec["_remote"], rec["_changes"],
-                      platform, None, None, say)
+                      platform, install_dir, simhub_dir, say)
         return ok, ("bridge updated to %s" % rec["_tag"]) if ok else "bridge update NOT applied", ok
     if rec["id"] == "thanos":
         ok, out = ff_merge(rec["where"])

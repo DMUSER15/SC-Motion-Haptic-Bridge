@@ -44,6 +44,10 @@ sc_verify_win.py use them), then runs the steps:
                     supports works; connect it in SimHub as usual): none (default) / thanos
                     (example; on Windows its COM port is a normal Windows port, nothing to set up)
                     / other. apply asks once and saves it; --select asks again.
+  13 control-window Start menu entry "Star Citizen Motion - Control window" (gui\\sc_control.py of
+                    this repository folder, started with pythonw.exe), after installing PySide6
+                    for your user with pip if it is missing (about 200 MB). The terminal launcher
+                    (step 11) works without it.
 Then: py -3 %USERPROFILE%\\sc-motion\\sc_verify_win.py
 
 Steps 1 and 7 write under C:\\ProgramData\\D-BOX and may need an elevated PowerShell.
@@ -93,7 +97,7 @@ def files_to_install():
         if n in M.LINUX_ONLY:
             continue
         out[n] = os.path.join(REPO, "scripts", n)
-    for p in ("winproc.py", "winlocate.py", "sc_cert_win.py", "sc_start_win.py", "sc_verify_win.py"):
+    for p in ("winproc.py", "winlocate.py", "sc_cert_win.py", "sc_start_win.py", "sc_verify_win.py", "winshortcut.py"):
         out[p] = os.path.join(HERE, p)
     for p in ("scm_common.py", "scm_checks.py", "scm_motion_hw.py", "scm_simdef.py", "scm_update.py",
               "scm_ports.py", "scm_proc.py"):
@@ -334,6 +338,38 @@ def a_shortcut():
     return os.path.isfile(LNK), (r.stdout + r.stderr).strip() or "created"
 
 
+PYSIDE = "py -3 -m pip install --user PySide6"
+
+
+def pyside_ok():
+    r = subprocess.run([sys.executable, "-c", "import PySide6"], capture_output=True, text=True)
+    return r.returncode == 0
+
+
+def s_control():
+    if not IS_WIN:
+        return "INFO", "Windows only (Linux: python3 gui/sc_control.py)"
+    import winshortcut
+    if not os.path.isfile(os.path.join(REPO, "gui", "sc_control.py")):
+        return "INFO", "no gui\\ in this repository folder (control window not part of this copy)"
+    if not pyside_ok():
+        return "TODO", "install PySide6 (%s), then the Start menu entry" % PYSIDE
+    st, det = winshortcut.state(INSTALL, REPO, sys.executable)
+    return ("BLOCKED" if st == "BLOCKED" else st), det
+
+
+def a_control():
+    import winshortcut
+    if not pyside_ok():
+        print("      installing PySide6 for your user (pip; about 200 MB) ...")
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "--user", "PySide6"])
+        if r.returncode or not pyside_ok():
+            return False, "pip could not install PySide6 (see above); the terminal launcher still works. Later: " + PYSIDE
+    changed, text = winshortcut.ensure_control_entry(INSTALL, REPO, sys.executable)
+    st, det = winshortcut.state(INSTALL, REPO, sys.executable)
+    return st == "DONE", text if changed else det
+
+
 def s_motion():
     if MOTION_HW is None:
         return "INFO", "optional, not chosen: apply asks once; or: py -3 setup\\windows\\sc_install_win.py motion-hw none|thanos|other"
@@ -376,6 +412,7 @@ STEPS = [
     (10, "effects", s_effects, a_effects),
     (11, "shortcut", s_shortcut, a_shortcut),
     (12, "motion-hw", s_motion, None),
+    (13, "control-window", s_control, a_control),
 ]
 
 

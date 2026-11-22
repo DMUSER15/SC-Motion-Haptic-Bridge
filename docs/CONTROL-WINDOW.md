@@ -1,9 +1,5 @@
 # Control window (`gui/`)
 
-> **Private for now.** `gui/` is not exported (`tools/scm_export.py` has no `gui/` prefix). It
-> is built to become the public launcher in the next major public release; until then only the
-> developer profile uses it. This page is written so it can go public with the folder.
-
 A window that does what the terminal launcher (`scripts/sc_start.py`) does, with buttons instead
 of prompts, and shows the state of every part. The terminal launcher stays as it is; both use the
 same code (`gui/scm_control.py` imports `sc_start.py` and calls its functions step by step).
@@ -16,6 +12,26 @@ python3 ~/SC-Motion-Haptic-Bridge/gui/sc_control.py --check   # no window: print
 Needs PySide6 (`sudo pacman -S --needed pyside6`). Settings (menu **Settings**):
 `~/.config/sc-motion/control.json`: check for updates when it opens, start the bridge when it
 opens, start SimHub after the bridge self-test. Nothing is spoken: every message is in the window.
+
+## Windows
+
+Start menu: **Star Citizen Motion - Control window** (installer step 13, or created by the terminal
+launcher after an update brings `gui\`). By hand: `py -3 <repository folder>\gui\sc_control.py`,
+or `py -3 %USERPROFILE%\sc-motion\sc_start_win.py gui`.
+
+- The window runs from the **repository folder** the installer saved (the one updates keep
+  current) and drives the installed launcher `%USERPROFILE%\sc-motion\sc_start_win.py`: same
+  steps and checks as the Start menu's terminal launcher. Install with `Install-SCMotion.ps1 -Apply`
+  first; without that installed launcher the window says so and closes.
+- SimHub and the RSI Launcher are started directly (no Wine). There is no Wine clean-up card and
+  no "orphan SimHub" state; "Show RSI Launcher" brings an open launcher to the front.
+- Needs PySide6. Installer step 13 installs it for your user with pip; if it is missing when the
+  window starts, the window offers to install it (a console shows pip's progress).
+- Updates from the window replace the changed files in the repository folder, copy the runtime
+  files into `%USERPROFILE%\sc-motion` again and update SimHub's game definition / plugin, like the
+  terminal launcher's update. The window restarts itself afterwards.
+- Settings: `%APPDATA%\sc-motion\control.json`. Logs: `%USERPROFILE%\lm_capture\launch\` and the
+  error log in `%LOCALAPPDATA%\sc-motion\logs`.
 
 ## Cards
 
@@ -83,10 +99,11 @@ without code changes elsewhere:
   and `refresh(snap)` (optional `visible_for(snap)`, `on_close()`); see `gui/ui_base.py`.
 - A missing card file is skipped; a card that raises is reported once in the activity log and
   the rest of the window keeps working.
+- `"platforms": ["linux"]` (optional) shows a card only on those platforms (the Wine card).
 
 To make a developer card public: move its file into `gui/panels/`, move its entry from the
 profile's `PANELS` to `gui/panels.json` with `tier: public`, and make sure it uses nothing from
-`tools/dev/`. To publish the window: add `gui/` to the export prefixes in `tools/scm_export.py`
-(the export still refuses anything in `tools/dev/`), add this page to the exported docs, and add
-a public menu entry. Windows support needs the Windows launcher's functions
-(`setup/windows/sc_start_win.py`) behind the same engine; not done yet.
+`tools/dev/`. Windows: `scm_control.load_launcher()` imports the installed `sc_start_win.py`
+and calls its `for_control_window()` (its `patch()` plus Windows SimHub detection, the RSI Launcher
+as launch target, no Wine, and one shared process list per second, because each Windows process
+list costs a PowerShell call).

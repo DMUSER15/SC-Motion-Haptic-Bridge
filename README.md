@@ -2,10 +2,6 @@
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/dmuser15)
 
-****Version 0.2.0 on a test branch****
-Added a full GUI and a bunch of fixes. Keeping 0.11 until Windows update version is tested as working and will commit it to Main branch. Should update automatically upon launch, or install release over 0.11 release folder
-
-
 Star Citizen motion telemetry → SimHub → your motion platform and bass shakers, on **Linux** (CachyOS / Arch, Wine) and **Windows**.
 
 > **Alpha.** Linux is in daily use and is the version this release was tested on.
@@ -42,7 +38,7 @@ lm_simhub4t.py tee ──► lm_simhub4.py bridge (100 Hz, seat gate, vehicle na
 
 Two ways to start it, both running the same steps in the same order (update check, certificate check, capture server and TLS self-test, tee and bridge with a zero-frame self-test, add-ons, SimHub with an active-game warning, a rig pause while you bring the platform up, then the game; clean-up after the game exits):
 
-- **Control window** (Linux, new): `python3 gui/sc_control.py` from your copy of this repository. It has no menu entry of its own yet.
+- **Control window**: Linux `python3 gui/sc_control.py` from your copy of this repository (no menu entry of its own yet); Windows: Start menu **Star Citizen Motion - Control window** (new in 0.2.1-alpha). Guide: [docs/CONTROL-WINDOW.md](docs/CONTROL-WINDOW.md).
 - **Start StarCitizen - Motion Enabled** (Linux menu) / the Start menu shortcut (Windows): the terminal launcher, as before.
 
 ## Install
@@ -112,7 +108,7 @@ You use this software at your own risk (see the licence: no warranty).
 | Folder | Contents |
 |---|---|
 | `scripts/` | Runtime scripts: launcher, capture server and its schema, tee and bridge, effects engine, certificate tools, plugin installer, clean-up, add-on taps. On Linux they are linked into your home folder; Windows copies them to `%USERPROFILE%\sc-motion`. |
-| `gui/` | The control window (Linux; PySide6). |
+| `gui/` | The control window (Linux and Windows; PySide6). |
 | `plugin/` | SC Haptics SimHub plugin source and `effects.default.json`. |
 | `config/` | `effects.json` (your effects; never overwritten by updates) and `simhub/Star Citizen.simdef` (SimHub's game definition, installed by the installers). |
 | `telemetry/` | `sc_fields.json`, the field database (what each telemetry value is, its unit and how sure we are). |

@@ -5,6 +5,8 @@ check it, start SimHub, wait for the rig, then start the RSI Launcher.
     py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py         start everything
     py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py stop    stop a capture server / bridge left running
     py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py rollback    undo the newest update (asks first)
+    py -3 %USERPROFILE%\\sc-motion\\sc_start_win.py gui     open the control window instead (needs PySide6;
+                                                          Start menu: "Star Citizen Motion - Control window")
 
 Same order and checks as sc_start.py on Linux, reusing its helpers (imported unchanged):
   0  update check (scm_update.py): newer public release? Pause only then; [u]pdate replaces
@@ -64,6 +66,7 @@ LOG_DIR = os.path.join(HOME, "lm_capture", "launch")
 AUTO_STOP_AFTER_GAME = int(os.environ.get("SC_START_AUTO_STOP", "30"))  # seconds
 RIG_PAUSE = os.environ.get("SC_START_NO_PAUSE") != "1"
 DETACHED = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+REPO_DIR = _CFG.get("repo") if _CFG.get("repo") and os.path.isdir(_CFG.get("repo")) else None
 
 
 # ---------------------------------------------------------------- Windows versions of helpers
@@ -90,6 +93,33 @@ def stop_pid(pid, name):
             return
         time.sleep(0.25)
     S.say("WARNING: could not stop %s (pid %d)" % (name, pid))
+
+
+def simhub_state():
+    """-> ("none" | "running", [pids]). Windows has no Wine server, so SimHub is never "stuck"
+    (sc_start.simhub_state reads /proc and would always answer "none" here)."""
+    pids = sorted(pid for pid, _ in S.scan(S.SIMHUB_NEEDLE))
+    return ("running" if pids else "none"), pids
+
+
+def cached_processes(ttl=1.0):
+    """winproc.processes() asks PowerShell (about a second per call). The control window checks
+    the game, the RSI Launcher, SimHub and the bridge every 2 s, so one process list is shared
+    for ttl seconds."""
+    import threading
+    real = winproc.processes
+    lock = threading.Lock()
+    memo = {"t": -1e9, "v": []}
+
+    def processes():
+        with lock:
+            now = time.monotonic()
+            if now - memo["t"] > ttl:
+                memo["v"] = real()
+                memo["t"] = time.monotonic()
+            return list(memo["v"])
+    processes.real = real
+    return processes
 
 
 def run_lmcert(action):
@@ -122,6 +152,61 @@ def patch():
     S.CAPTURE_NEEDLES = (S.CAPTURE_NEEDLE, "lm_server2.py")  # old name: still stopped as a leftover
     S.SIMHUB_LOG = os.path.join(SIMHUB_DIR, "Logs", "SimHub.txt")
     S.BRIDGE_NEEDLES = tuple(sorted(set(S.ALL_BRIDGE_NEEDLES + (os.path.basename(BRIDGE_SCRIPT).lower(),))))
+    # used by the control window (gui/scm_control.py) on Windows
+    S.simhub_state = simhub_state
+    S.gamescope_for_launcher = lambda: []
+    S.SIMHUB_DIR = SIMHUB_DIR
+    S.SIMHUB_EXE = SIMHUB_EXE
+    S.HAPTICS_DLL = os.path.join(SIMHUB_DIR, "SCHaptics.dll")
+    S.RSI_LAUNCHER = RSI_LAUNCHER
+    S.SC_LAUNCH = RSI_LAUNCHER            # what the window starts (Linux: sc-launch.sh)
+    S.GAME_PREFIX = os.path.dirname(RSI_LAUNCHER)
+    S.DETACHED = DETACHED
+    S.INSTALL_DIR = HERE
+    S.REPO_DIR = REPO_DIR
+    S.wine_leftovers = None               # no Wine on Windows: the Wine clean-up card is hidden
+    S.wine_cleanup = None
+    S.PLATFORM = "windows"
+
+
+def for_control_window():
+    """The patched launcher module for gui/scm_control.py (Windows)."""
+    patch()
+    winproc.processes = cached_processes()
+    return S
+
+
+def control_window_entry(quiet=False):
+    """Make sure the Start menu has the control window entry once the repository folder has
+    gui/ (an update from 0.1.1 brings gui/ but never ran installer step 13). -> text or ''."""
+    try:
+        import winshortcut  # noqa: E402  (installed next to this file)
+    except ImportError:
+        return ""
+    try:
+        changed, text = winshortcut.ensure_control_entry(HERE, REPO_DIR, sys.executable)
+    except Exception as e:  # noqa: BLE001  a missing shortcut never stops the pipeline
+        return "" if quiet else "control window entry not created (%s)" % e
+    return text if changed else ""
+
+
+def cmd_gui():
+    """Open the control window (same as the Start menu entry). -> exit code."""
+    if not REPO_DIR or not os.path.isfile(os.path.join(REPO_DIR, "gui", "sc_control.py")):
+        S.say("the control window is in the repository folder's gui\\ (folder saved by the installer: %s). "
+              "Download the release and run Install-SCMotion.ps1 -Apply from it." % (REPO_DIR or "none"))
+        return 1
+    try:
+        import PySide6  # noqa: F401
+    except ImportError:
+        S.say("the control window needs PySide6: py -3 -m pip install --user PySide6")
+        return 2
+    pyw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+    exe = pyw if os.path.isfile(pyw) else sys.executable
+    subprocess.Popen([exe, os.path.join(REPO_DIR, "gui", "sc_control.py")], cwd=REPO_DIR,
+                     creationflags=DETACHED, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    S.say("control window started")
+    return 0
 
 
 def cmd_stop():
@@ -161,6 +246,9 @@ def main():
     if RIG_PAUSE and not sys.stdin.isatty():
         S.fail("the rig pause needs a console for the Enter key")
     S.STATE["motion_changed"] = update_gate()
+    note = control_window_entry()
+    if note:
+        S.say(note)
 
     blockers = S.scan(*S.BLOCKER_NEEDLES)
     if blockers:
@@ -309,6 +397,8 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["stop"]:
         cmd_stop()
         sys.exit(0)
+    if sys.argv[1:] == ["gui"]:
+        sys.exit(cmd_gui())
     if sys.argv[1:] == ["rollback"]:
         import scm_update  # noqa: E402  (installed next to this file)
         sys.exit(scm_update.rollback("windows", _CFG.get("repo"), HOME, S.say,

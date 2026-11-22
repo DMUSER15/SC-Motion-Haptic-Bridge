@@ -205,12 +205,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def _settings_menu(self):
         m = QtWidgets.QMenu(self)
         s = self.control.settings
-        for key, text in (("check_updates", "Check for updates when the window opens"),
-                          ("autostart", "Start the motion bridge when the window opens"),
-                          ("start_simhub", "Start SimHub after the bridge self-test"),
-                          ("start_launcher", "Start the RSI Launcher after the start-up"),
-                          ("wine_cleanup_on_close", "Clean up Wine (game, SimHub) when this window closes"),
-                          ("simhub_rig_check", "Rig checklist before SimHub is closed (off: Yes/No only)")):
+        items = [("check_updates", "Check for updates when the window opens"),
+                 ("autostart", "Start the motion bridge when the window opens"),
+                 ("start_simhub", "Start SimHub after the bridge self-test"),
+                 ("start_launcher", "Start the RSI Launcher after the start-up"),
+                 ("wine_cleanup_on_close", "Clean up Wine (game, SimHub) when this window closes"),
+                 ("simhub_rig_check", "Rig checklist before SimHub is closed (off: Yes/No only)")]
+        if self.control.platform == "windows":       # no Wine on Windows
+            items = [x for x in items if x[0] != "wine_cleanup_on_close"]
+        for key, text in items:
             a = m.addAction(text)
             a.setCheckable(True)
             a.setChecked(bool(s.get(key)))
@@ -343,6 +346,13 @@ class MainWindow(QtWidgets.QMainWindow):
         EL = getattr(self.control.sc, "EL", None)
         if EL is not None and EL.current() is not None:
             EL.finish(0)
+        if os.name == "nt":
+            # Windows: os.execv starts the new copy while this one is still running; start it
+            # detached instead and leave (as scm_update._restart does for the terminal launcher)
+            import subprocess
+            subprocess.Popen([sys.executable] + sys.argv, creationflags=0x00000008 | 0x00000200,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            os._exit(0)
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # ---- refresh

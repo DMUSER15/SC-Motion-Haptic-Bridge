@@ -54,7 +54,7 @@ The bridge sends the game's values unshaped; all shaping and limits are yours, i
 |---|---|
 | downloading and unpacking a release | replaces the changed files in that folder |
 | `git clone` of this repository | runs `git fetch` and fast-forwards to the release tag. If you changed tracked files other than `config/effects.json`, git refuses and nothing changes; update by hand with git |
-| Windows | updates the repository folder the installer saved, then copies the runtime files into `%USERPROFILE%\sc-motion` again (the same files as installer step 6) |
+| Windows | updates the repository folder the installer saved, then copies the runtime files into `%USERPROFILE%\sc-motion` again (the same files as installer step 6). The control window runs from that repository folder, so it is current after the update; the terminal launcher adds its Start menu entry the first time it finds `gui\` there |
 
 Keep the folder you installed from: it is the one that gets updated. If you moved or deleted it on Windows, the launcher can only tell you about the new release; download it and run `Install-SCMotion.ps1 -Apply` from the new folder (your settings are kept).
 

@@ -9,7 +9,8 @@
                   missing, then runs setup\windows\sc_install_win.py apply: when several
                   locations are found it shows a menu, saves the choice in
                   %APPDATA%\sc-motion\config.json, and runs the TODO steps only when D1-D5
-                  are all DONE.
+                  are all DONE. Step 13 installs PySide6 for your user (pip, about 200 MB) if
+                  it is missing and adds the Start menu entry of the control window.
   -Select:        with -Apply, show the menus again even when a choice is saved.
   -RsiLauncher, -LiveDir, -SimHubDir: choose a location directly (no menu).
   -MotionHardware none|thanos|other: the optional motion hardware choice (step 12) directly.

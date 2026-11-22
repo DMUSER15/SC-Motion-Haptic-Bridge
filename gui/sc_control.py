@@ -24,7 +24,13 @@ What it shows and does (cards, top to bottom; gui/panels.json):
   Logging tools  (developer mode only) choose, start, watch and stop the logging tools
 Closing the window stops the bridge, capture server and add-ons (SimHub stays, like the
 terminal launcher). Problems go to the project error log (program sc-control / sc-control-dev).
-Needs PySide6 (sudo pacman -S --needed pyside6). Settings: ~/.config/sc-motion/control.json.
+Needs PySide6. Settings: ~/.config/sc-motion/control.json.
+
+Windows: Start menu "Star Citizen Motion - Control window" (installer step 13), or
+  py -3 <repository folder>\\gui\\sc_control.py
+It drives the installed %USERPROFILE%\\sc-motion\\sc_start_win.py (same steps as the terminal
+launcher), starts SimHub and the RSI Launcher directly, and has no Wine card. Without PySide6 it
+offers to install it (pip, for your user). Settings: %APPDATA%\\sc-motion\\control.json.
 """
 import argparse
 import importlib.util
@@ -37,6 +43,70 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 DEV_PROFILE = os.path.join(REPO, "tools", "dev", "gui_profile.py")
 TITLE = "Star Citizen Motion"
+CREATE_NO_WINDOW = 0x08000000
+PYSIDE_HINT = {"linux": "sudo pacman -S --needed pyside6",
+               "windows": "py -3 -m pip install --user PySide6"}
+TERMINAL_HINT = {"linux": "python3 ~/sc_start.py",
+                 "windows": "Start menu: Start StarCitizen - Motion Enabled"}
+
+
+def quiet_children():
+    """Windows: programs this window starts without a creationflags of their own (git, pip,
+    PowerShell, the bridge under python.exe) get no console window of their own. SimHub and the
+    RSI Launcher are started with their own flags and are not affected."""
+    import subprocess
+    if os.name != "nt" or getattr(subprocess.Popen, "_sc_quiet", False):
+        return
+    orig = subprocess.Popen.__init__
+
+    def init(self, *args, **kw):
+        if not kw.get("creationflags"):
+            kw["creationflags"] = CREATE_NO_WINDOW
+        orig(self, *args, **kw)
+    subprocess.Popen.__init__ = init
+    subprocess.Popen._sc_quiet = True
+
+
+def message_box(text, title=TITLE, yes_no=False):
+    """A native Windows message box (no Qt needed). -> True for OK / Yes."""
+    try:
+        import ctypes
+        flags = (0x04 | 0x20) if yes_no else 0x40            # MB_YESNO|MB_ICONQUESTION, MB_ICONINFORMATION
+        return ctypes.windll.user32.MessageBoxW(None, text, title, flags) in (1, 6)   # IDOK, IDYES
+    except Exception:  # noqa: BLE001  no Windows GUI: the console line below still says it
+        print(text)
+        return False
+
+
+def offer_pyside_windows():
+    """No PySide6 on Windows: offer to install it with pip for this user, in a console window
+    that shows pip's progress. -> True when PySide6 can be imported afterwards."""
+    import subprocess
+    if not message_box("The control window needs PySide6 (the Qt library for Python, about 200 MB).\n\n"
+                       "Install it now for your Windows user with pip?\n\n"
+                       "Without it, the terminal launcher still works (Start menu: Start StarCitizen - "
+                       "Motion Enabled).", yes_no=True):
+        return False
+    py = os.path.join(os.path.dirname(sys.executable), "python.exe")
+    py = py if os.path.isfile(py) else sys.executable
+    cmd = ('"%s" -m pip install --user PySide6 && echo. && echo PySide6 installed; this window closes in 5 s. '
+           '&& timeout /t 5 >nul || (echo. & echo pip failed, see above. & pause)' % py)
+    try:
+        subprocess.call(["cmd.exe", "/c", cmd], creationflags=0x00000010)   # CREATE_NEW_CONSOLE
+    except OSError as e:
+        message_box("Could not start pip (%s).\n\nInstall it from a terminal:\n%s" % (e, PYSIDE_HINT["windows"]))
+        return False
+    try:
+        import importlib
+        importlib.invalidate_caches()
+        import site
+        if site.ENABLE_USER_SITE and site.getusersitepackages() not in sys.path:
+            sys.path.append(site.getusersitepackages())
+        import PySide6  # noqa: F401
+        return True
+    except ImportError:
+        message_box("PySide6 is still not available.\n\nInstall it from a terminal:\n" + PYSIDE_HINT["windows"])
+        return False
 
 
 ICON_FILES = ("config/icons/sc-motion.svg", "config/icons/sc-motion.png", "docs/logo.svg", "docs/logo.png")
@@ -88,19 +158,30 @@ def main(argv=None):
     if a.dev and profile is None:
         print("developer mode is not available in this copy (no tools/dev); starting in normal mode")
     import scm_control as C
-    sc = C.load_launcher(profile)
+    win_gui = C.PLATFORM == "windows" and not a.check
+    if win_gui:
+        quiet_children()
+    try:
+        sc = C.load_launcher(profile)
+    except C.LauncherMissing as e:
+        if win_gui:
+            message_box("The control window cannot start:\n\n%s" % e)
+        print(e)
+        return 3
     settings = C.load_settings()
     if a.no_autostart:
         settings["autostart"] = False
-    control = C.Control(sc, platform="linux", settings=settings, profile=profile)
+    control = C.Control(sc, platform=C.PLATFORM, settings=settings, profile=profile)
     if a.check:
         return print_check(control, profile)
     try:
         from PySide6 import QtCore, QtGui, QtWidgets
     except ImportError:
-        print("The control window needs PySide6: sudo pacman -S --needed pyside6\n"
-              "(the terminal launcher works without it: python3 ~/sc_start.py)")
-        return 2
+        if not (win_gui and offer_pyside_windows()):
+            print("The control window needs PySide6: %s\n(the terminal launcher works without it: %s)"
+                  % (PYSIDE_HINT.get(C.PLATFORM, "pip install PySide6"), TERMINAL_HINT.get(C.PLATFORM, "")))
+            return 2
+        from PySide6 import QtCore, QtGui, QtWidgets
     EL = getattr(sc, "EL", None)
     if EL is not None:
         EL.start("sc-control-dev" if profile else "sc-control")
@@ -121,8 +202,11 @@ def main(argv=None):
         def _term(*_):
             win.force_close = True
             QtCore.QTimer.singleShot(0, win.close)
-        for sg in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
-            signal.signal(sg, _term)            # handled at the window's next timer tick (every 0.5 s)
+        # Windows has no SIGHUP (0.2.0 crashed here right after the window was shown)
+        for name in ("SIGTERM", "SIGHUP", "SIGINT"):
+            sg = getattr(signal, name, None)
+            if sg is not None:
+                signal.signal(sg, _term)        # handled at the window's next timer tick (every 0.5 s)
         control.start_monitor()
         QtCore.QTimer.singleShot(300, win.startup)
         code = app.exec()

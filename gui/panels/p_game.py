@@ -28,7 +28,7 @@ class Panel(Base):
                 self, "Platform movement values changed", MOTION_WARNING + "\n\nStart the RSI Launcher?",
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No) != QtWidgets.QMessageBox.Yes:
             return
-        if snap["game"]["launcher"] and QtWidgets.QMessageBox.question(
+        if snap["game"]["launcher"] and self.control.platform != "windows" and QtWidgets.QMessageBox.question(
                 self, "Restart the RSI Launcher",
                 "An RSI Launcher is already open (perhaps without a window). Starting it again closes it and Wine in "
                 "the game prefix first (sc-launch.sh does that), then opens a new one. Restart it?") != QtWidgets.QMessageBox.Yes:
@@ -52,4 +52,8 @@ class Panel(Base):
             else:
                 self.info.setText("Ready: motion bridge and SimHub are running.")
         self.b_launch.setEnabled(not busy and not g["game"])
-        self.b_launch.setText("Restart RSI Launcher…" if g["launcher"] else "Start RSI Launcher")
+        if self.control.platform == "windows":
+            # Windows: starting it again only brings the open launcher to the front
+            self.b_launch.setText("Show RSI Launcher" if g["launcher"] else "Start RSI Launcher")
+        else:
+            self.b_launch.setText("Restart RSI Launcher…" if g["launcher"] else "Start RSI Launcher")

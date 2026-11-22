@@ -13,6 +13,14 @@ from a terminal, in the same order and with the same checks:
              terminal's "press Enter".
   after      when StarCitizen.exe closes, the launcher and Wine in the game prefix are closed
              after 30 s (cancellable), like the terminal launcher.
+Platforms
+  linux      the launcher is scripts/sc_start.py of this repository; SimHub runs under Wine and
+             the game through LUG-Helper's sc-launch.sh.
+  windows    the launcher is the installed %USERPROFILE%\\sc-motion\\sc_start_win.py (installer
+             step 6), whose patch() points sc_start's helpers at Windows (processes, ports,
+             certificate tool, SimHub detection; no Wine). SimHub and the RSI Launcher are
+             started directly. The window itself runs from the repository folder, the one the
+             updates keep current.
 Problems are written to the project error log (scm_errlog) by the launcher's own functions:
 children's tracebacks, a child that stops, a failed step.
 
@@ -36,7 +44,15 @@ REPO = os.path.dirname(HERE)
 SCRIPTS = os.path.join(REPO, "scripts")
 COMMON = os.path.join(REPO, "setup", "common")
 HOME = os.path.expanduser("~")
-SETTINGS_PATH = os.path.join(HOME, ".config", "sc-motion", "control.json")
+# SC_CONTROL_PLATFORM: tests only (exercise the Windows path on Linux with stand-ins)
+PLATFORM = os.environ.get("SC_CONTROL_PLATFORM") or ("windows" if os.name == "nt" else "linux")
+if PLATFORM == "windows":
+    SETTINGS_PATH = os.path.join(os.environ.get("APPDATA") or os.path.join(HOME, "AppData", "Roaming"),
+                                 "sc-motion", "control.json")
+else:
+    SETTINGS_PATH = os.path.join(HOME, ".config", "sc-motion", "control.json")
+# Windows: where the installer copied the runtime files (installer step 6)
+INSTALL_DIR = os.environ.get("SC_SCM_INSTALL_DIR", os.path.join(HOME, "sc-motion"))
 SETTINGS = {"autostart": True, "start_simhub": True, "check_updates": True, "mfd_source": "~/SC-Motion-MFD",
             "start_launcher": True, "wine_cleanup_on_close": False, "simhub_rig_check": True}
 HB_STALL = 5.0          # seconds without a bridge status line while the bridge runs = not responding
@@ -67,12 +83,15 @@ def save_settings(s, path=SETTINGS_PATH):
     os.replace(tmp, path)
 
 
-def load_registry(dev, profile, path=None):
+def load_registry(dev, profile, path=None, platform=None):
     """The window's cards (gui/panels.json) -> [entry] in order: the public cards, then (developer
     mode) the profile's cards, each placed after the card its "after" names. Entries whose module
-    file is missing are dropped. No Qt here, so sc_control.py --check works without PySide6."""
+    file is missing, or whose "platforms" list does not name this platform, are dropped. No Qt
+    here, so sc_control.py --check works without PySide6."""
+    platform = platform or PLATFORM
     with open(path or os.path.join(HERE, "panels.json"), encoding="utf-8") as f:
-        entries = [dict(e) for e in json.load(f)["panels"] if e.get("tier", "public") == "public"]
+        entries = [dict(e) for e in json.load(f)["panels"] if e.get("tier", "public") == "public"
+                   and platform in e.get("platforms", (platform,))]
     if dev and profile is not None:
         for e in getattr(profile, "PANELS", []):
             e = dict(e, tier="dev")
@@ -87,8 +106,26 @@ def load_registry(dev, profile, path=None):
     return out
 
 
-def load_launcher(profile=None):
-    """Import scripts/sc_start.py (unchanged); a profile may adjust it (developer tee)."""
+class LauncherMissing(Exception):
+    """The Windows launcher is not installed (no %USERPROFILE%\\sc-motion\\sc_start_win.py)."""
+
+
+def load_launcher(profile=None, platform=None):
+    """Linux: import scripts/sc_start.py (unchanged). Windows: import the installed
+    sc_start_win.py and let it patch sc_start for Windows. A profile may adjust it (developer tee)."""
+    platform = platform or PLATFORM
+    if platform == "windows":
+        if not os.path.isfile(os.path.join(INSTALL_DIR, "sc_start_win.py")):
+            raise LauncherMissing("the motion pipeline is not installed in %s: run setup\\windows\\Install-SCMotion.ps1 "
+                                  "-Apply from this repository folder first" % INSTALL_DIR)
+        if INSTALL_DIR in sys.path:
+            sys.path.remove(INSTALL_DIR)
+        sys.path.insert(0, INSTALL_DIR)    # the installed copies first (sc_start, winproc, scm_*)
+        import sc_start_win
+        sc_start = sc_start_win.for_control_window()
+        if profile is not None and hasattr(profile, "configure_launcher"):
+            sc_start = profile.configure_launcher(sc_start) or sc_start
+        return sc_start
     if SCRIPTS not in sys.path:
         sys.path.insert(0, SCRIPTS)
     import sc_start
@@ -177,6 +214,8 @@ def mtime(path):
 
 def _gone(pid):
     """The process has exited (a zombie counts as gone)."""
+    if not os.path.isdir("/proc"):
+        return True                        # only used for Wine orphans, which Windows never has
     try:
         with open("/proc/%d/stat" % pid) as f:
             return f.read().rsplit(")", 1)[1].split()[0] == "Z"
@@ -306,6 +345,8 @@ class Control:
         launcher = True if game else bool(lpids)
         if game:
             g = ("green", "Star Citizen is running")
+        elif launcher and self.platform == "windows":
+            g = ("blue", "RSI Launcher is open, the game is not running (pid %s)" % ", ".join(map(str, lpids[:4])))
         elif launcher:
             g = ("blue", "RSI Launcher is open, the game is not running (pid %s). No launcher window? "
                          "Restart it, or end it with Wine clean-up." % ", ".join(map(str, lpids[:4])))
@@ -598,11 +639,19 @@ class Control:
         if state == "stuck":
             self._step("SimHub", "decide", "an orphan SimHub process is in the way: use End orphan and restart")
             return False
-        env = dict(os.environ, WINEPREFIX=sc.SIMHUB_PREFIX)
         try:
-            with open(os.path.join(sc.LOG_DIR, "simhub.log"), "ab") as lf:
-                subprocess.Popen([sc.SIMHUB_WINE, sc.SIMHUB_EXE], env=env, stdout=lf, stderr=subprocess.STDOUT,
-                                 stdin=subprocess.DEVNULL, start_new_session=True)
+            if self.platform == "windows":
+                if not os.path.isfile(sc.SIMHUB_EXE):
+                    self._step("SimHub", "fail", "SimHub not found: %s (run Install-SCMotion.ps1 -Apply -Select, "
+                                                 "or set SC_SIMHUB_DIR)" % sc.SIMHUB_EXE)
+                    return False
+                subprocess.Popen([sc.SIMHUB_EXE], cwd=os.path.dirname(sc.SIMHUB_EXE), creationflags=sc.DETACHED,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+            else:
+                env = dict(os.environ, WINEPREFIX=sc.SIMHUB_PREFIX)
+                with open(os.path.join(sc.LOG_DIR, "simhub.log"), "ab") as lf:
+                    subprocess.Popen([sc.SIMHUB_WINE, sc.SIMHUB_EXE], env=env, stdout=lf, stderr=subprocess.STDOUT,
+                                     stdin=subprocess.DEVNULL, start_new_session=True)
         except OSError as e:
             self._step("SimHub", "fail", "could not start SimHub (%s)" % e)
             return False
@@ -610,7 +659,8 @@ class Control:
         while time.monotonic() < end and sc.simhub_state()[0] != "running":
             time.sleep(1)
         if sc.simhub_state()[0] != "running":
-            self._step("SimHub", "fail", "SimHub did not appear within 60 s (log %s)" % os.path.join(sc.LOG_DIR, "simhub.log"))
+            self._step("SimHub", "fail", "SimHub did not appear within 60 s" + (
+                "" if self.platform == "windows" else " (log %s)" % os.path.join(sc.LOG_DIR, "simhub.log")))
             return False
         self._step("SimHub", "ok", "started (it keeps running when this window closes)")
         time.sleep(settle)
@@ -678,13 +728,23 @@ class Control:
             self.say("RSI Launcher not started: " + "; ".join(why))
             return False
         self._set(rig_confirmed=True)
-        try:
-            p = subprocess.Popen([self.sc.SC_LAUNCH], cwd=self.sc.GAME_PREFIX, stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
-        except OSError as e:
-            self.say("could not start sc-launch.sh (%s)" % e)
-            return False
-        self.say("started sc-launch.sh (pid %d); its own log is sc-launch.log in the game prefix" % p.pid)
+        if self.platform == "windows":
+            try:
+                p = subprocess.Popen([self.sc.SC_LAUNCH], cwd=os.path.dirname(self.sc.SC_LAUNCH),
+                                     creationflags=self.sc.DETACHED, stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+            except OSError as e:
+                self.say("could not start the RSI Launcher (%s)" % e)
+                return False
+            self.say("started the RSI Launcher (pid %d); launch Star Citizen from it" % p.pid)
+        else:
+            try:
+                p = subprocess.Popen([self.sc.SC_LAUNCH], cwd=self.sc.GAME_PREFIX, stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True)
+            except OSError as e:
+                self.say("could not start sc-launch.sh (%s)" % e)
+                return False
+            self.say("started sc-launch.sh (pid %d); its own log is sc-launch.log in the game prefix" % p.pid)
         for n in self.launch_notes():
             self.say("note: " + n)
         if not self.st["cert"].get("check") in (0, 9, None):
@@ -883,7 +943,9 @@ class Control:
                 self.say("%s: not updated (platform movement values change; YES was not typed)" % r["title"])
                 continue
             ok, text, rs = AU.apply(r, self.say, lambda: bool(self.sc.scan(self.sc.GAME_EXE)),
-                                    lambda: self.sc.simhub_state()[0] == "running", platform=self.platform)
+                                    lambda: self.sc.simhub_state()[0] == "running", platform=self.platform,
+                                    install_dir=getattr(self.sc, "INSTALL_DIR", None),
+                                    simhub_dir=getattr(self.sc, "SIMHUB_DIR", None))
             self.say(("updated: " if ok else "NOT updated: ") + text)
             if ok and r.get("motion"):
                 self._set(motion_changed=True)

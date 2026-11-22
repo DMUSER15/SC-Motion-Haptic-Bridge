@@ -390,7 +390,7 @@ def _ask(prompt, choices, default):
     while True:
         try:
             a = input(prompt).strip().lower()
-        except EOFError:
+        except (EOFError, RuntimeError, OSError):   # no console (control window under pythonw.exe)
             return default
         if not a:
             return default

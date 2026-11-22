@@ -87,7 +87,7 @@ cd $env:USERPROFILE\SC-Motion-Haptic-Bridge
 powershell -ExecutionPolicy Bypass -File .\setup\windows\Install-SCMotion.ps1
 ```
 
-This first run is **read-only**. It shows every RSI Launcher, LIVE folder and SimHub it found, the dependencies D1–D5 and the steps 1–12. When it looks right:
+This first run is **read-only**. It shows every RSI Launcher, LIVE folder and SimHub it found, the dependencies D1–D5 and the steps 1–13. When it looks right:
 
 > **NOTE: TODO and BLOCKED lines are normal on this first run.** Steps that depend on an earlier step show **BLOCKED**, and steps that have not been done yet show **TODO**. They will not clear until you run the next command with `-Apply` in an **administrator** PowerShell.
 
@@ -121,6 +121,7 @@ Then it runs the steps that are TODO:
 | 10 | effects | `%USERPROFILE%\sc_haptics\effects.json`, your effects (never overwritten later) |
 | 11 | shortcut | Start menu entry **Start StarCitizen - Motion Enabled** |
 | 12 | motion-hw | **optional**: `none` (default), `thanos` (example) or `other`; information only, never blocks |
+| 13 | control-window | installs PySide6 for your user (pip, about 200 MB) if missing, then the Start menu entry **Star Citizen Motion - Control window** |
 
 If a step says "permission denied", PowerShell was not elevated: run the `-Apply` line again **as administrator** with the same account.
 
@@ -158,7 +159,12 @@ py -3 $env:USERPROFILE\sc-motion\sc_verify_win.py --live
 
 ## 9. Start
 
-Start the pipeline **from the Start menu**: open **Start → Start StarCitizen - Motion Enabled** (the shortcut installer step 11 created). It opens its own PowerShell window. Do not start it from another window, and leave that window open while you play.
+Start the pipeline **from the Start menu**, one of:
+
+- **Star Citizen Motion - Control window** (installer step 13): a window with a card for each part (updates, motion bridge, SimHub, RSI Launcher, logs) and buttons instead of prompts. It runs the same steps as below; the rig check is a checklist instead of the Enter key. Guide: [CONTROL-WINDOW.md](CONTROL-WINDOW.md). Keep it open while you play; closing it stops the bridge.
+- **Start StarCitizen - Motion Enabled** (the terminal launcher, step 11), described below.
+
+The terminal launcher opens its own PowerShell window. Do not start it from another window, and leave that window open while you play.
 
 **Steps 1 to 6 below are the stages you will see running in that window**, in this order:
 
