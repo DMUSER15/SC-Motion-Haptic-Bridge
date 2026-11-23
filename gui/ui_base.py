@@ -178,6 +178,22 @@ def type_yes(parent, title, text):
     return bool(ok and val.strip().upper() == "YES")
 
 
+def link_label(url, text=None):
+    """A label with a link that opens in the browser (only http(s) links are shown as links)."""
+    from html import escape
+    lab = QtWidgets.QLabel()
+    if url and url.lower().startswith(("https://", "http://")):
+        lab.setTextFormat(QtCore.Qt.RichText)
+        lab.setText('<a href="%s">%s</a>' % (escape(url, quote=True), escape(text or url)))
+        lab.setOpenExternalLinks(True)
+        lab.setTextInteractionFlags(QtCore.Qt.TextBrowserInteraction)
+        lab.setToolTip("Opens %s in your browser" % url)
+    else:
+        lab.setTextFormat(QtCore.Qt.PlainText)
+        lab.setText(text or url or "")
+    return lab
+
+
 def show_text(parent, title, text, mono=True):
     d = QtWidgets.QDialog(parent)
     d.setWindowTitle(title)

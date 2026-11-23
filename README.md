@@ -74,6 +74,8 @@ New: `python3 ~/sc_start.py rollback` (Windows: `sc_start_win.py rollback`) undo
 
 ## Add-ons
 
+**[SC-MFD-Motion-Addon](https://github.com/DMUSER15/SC-MFD-Motion-Addon)** is the first add-on: a multi-function display on a Stream Deck, a touch screen or a second monitor (ship view, gear, shields, hits; buttons send keys). Install it from the control window's MFD card (**Install MFD**; the button reads **UPDATE MFD** when a newer release is out) or with `addon install mfd`. Its README lists the Python modules it needs (Pillow; PySide6, python-elgato-streamdeck + hidapi, python-evdev as you use them) with Linux and Windows install commands.
+
 Optional add-ons (for example a cockpit display) receive a read-only copy of the telemetry on their own UDP port ("taps") and read the field database in `telemetry/sc_fields.json` to know what each value means. Install, update, roll back or remove them with `python3 setup/linux/sc_motion_install.py addon …` (Windows: `setup\windows\sc_install_win.py addon …`); every file is checked against the add-on's `release.json` first. An add-on never changes what the bridge sends to SimHub. Set `SC_START_NO_ADDONS=1` to start without them, or `LM_TEE_TAPS=0` to switch taps off in the tee.
 
 ## Tuning is yours

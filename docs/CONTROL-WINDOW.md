@@ -42,7 +42,7 @@ or `py -3 %USERPROFILE%\sc-motion\sc_start_win.py gui`.
 | SimHub | running, more than one, or **orphan** (listed, but its Wine server is gone: no window, does nothing) | Start SimHub; End orphan and restart (after a rig check) |
 | RSI Launcher / Star Citizen | launcher / game running; what is still missing before a launch | Start RSI Launcher; Restart RSI Launcher… (when one is already open, perhaps without a window) |
 | Wine clean-up | the last clean-up; the option to clean up when the window closes | Clean up Wine… (lists what is left in the game prefix — RSI Launcher, Gamescope, Wine helpers — and in SimHub's prefix; untick what stays; SimHub only after the rig check) |
-| MFD add-on | only when installed: running / stopped; which surfaces start (tick boxes) | Restart MFD (surfaces restart in place, or the MFD starts again if it stopped; motion, SimHub and the bridge are not touched), MFD configurator |
+| MFD add-on | installed: running / stopped; which surfaces start (tick boxes). Not installed: shown when it can be installed (catalog entry or a clone at `mfd_source`) | Restart MFD (surfaces restart in place, or the MFD starts again if it stopped; motion, SimHub and the bridge are not touched), MFD configurator, **Install MFD** / **UPDATE MFD** (below) |
 | Logs | the newest log; a mark when a new error log was saved | Open latest log (your text editor); Log viewer |
 
 ## Order and safety (same as the terminal launcher)
@@ -85,6 +85,33 @@ installed) from a clone of its repository or its newest release. The prompt show
 new version and the new CHANGELOG sections. An update is refused when it would mix work (local
 changes or commits not on the remote), while the game runs, or with SimHub running when the
 game definition or the plugin changes.
+
+**Install MFD / UPDATE MFD** (MFD card, next to MFD configurator): while the MFD add-on is not
+installed the button reads **Install MFD**. It asks first, then downloads the newest release of
+[SC-MFD-Motion-Addon](https://github.com/DMUSER15/SC-MFD-Motion-Addon) (the repository in
+`addons/catalog.json`), checks every file against that release's `release.json` (sha256) and runs the
+MFD's own installer, the same as `sc_motion_install.py addon install mfd`. A git clone at the
+`mfd_source` setting (default `~/SC-Motion-MFD`, the developer's clone) is installed instead when it
+exists; set `"mfd_source": "release"` in the settings file to always use the release. When the update
+check finds a newer MFD release the button reads **UPDATE MFD** and opens the update dialog for the MFD
+only (the version before stays for `addon rollback mfd`). Otherwise it reads **MFD up to date**. Motion,
+SimHub and the bridge are never changed by it. With motion running, the window brings the new MFD up by
+itself: after an update on the same port it restarts only the MFD; after an install (or a new port) it
+restarts the bridge so it reads the tap files again. The capture server is never restarted (the game does
+not reconnect to it). While Star Citizen runs that bridge restart would pause motion for about two seconds,
+so it waits: the card shows **Connect MFD** (bold) in place of Restart MFD until you press it, or until the
+next Start.
+
+The install dialog and the update dialog link to the repository and the release page (click to open them
+in the browser). **What's new…** (install) and **Show changes…** (update, for every app) show the new
+CHANGELOG sections in full. A failed install or update, a refused one, and an update check that could not
+check something are added to this run's error log (Logs card), with the add-on installer's and its
+hooks' output as the details.
+
+**Taskbar icon (Linux):** a Wayland desktop takes a window's icon from the menu entry named like the
+window (`sc-control.desktop`). The window writes `~/.local/share/applications/sc-control.desktop` (menu
+entry "Star Citizen Motion - Control window", with this copy's logo) the first time it starts when there is
+none; it never replaces one. Delete it to have it written again (for example after moving the repository).
 
 ## Adding, removing, moving cards
 

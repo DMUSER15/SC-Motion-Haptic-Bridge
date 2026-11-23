@@ -1,0 +1,12 @@
+{
+ "schema": "sc-motion-addon-catalog",
+ "comment": "Optional add-ons the bridge installer knows by name (exported with every release). `addon install NAME` and the control window's Install button download the newest GitHub release of the repository and check every file against its release.json.",
+ "addons": [
+  {
+   "name": "mfd",
+   "title": "SC MFD (multi-function display)",
+   "repo": "DMUSER15/SC-MFD-Motion-Addon",
+   "summary": "Stream Deck / touch screen / monitor display of the bridge's telemetry: ship view, gear, shields, hits; buttons send keys. Receive-only: never changes motion."
+  }
+ ]
+}

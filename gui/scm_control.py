@@ -59,7 +59,8 @@ HB_STALL = 5.0          # seconds without a bridge status line while the bridge 
 TASK_NAMES = {"start": "starting the motion pipeline", "stop": "stopping the motion pipeline",
               "simhub": "starting SimHub", "simhub-restart": "ending the stuck SimHub and starting it again",
               "game": "starting the RSI Launcher", "repair": "repairing", "wine": "cleaning up Wine",
-              "update-check": "checking for updates", "update": "updating"}
+              "update-check": "checking for updates", "update": "updating", "mfd-install": "installing the MFD add-on",
+              "mfd-connect": "restarting the bridge for the MFD"}
 
 
 def load_settings(path=SETTINGS_PATH):
@@ -260,6 +261,7 @@ class Control:
             "task": None,
         }
         self._updates = []
+        self._problems_logged = set()
         sc.say = self.say
         sc.ESPEAK = None              # no spoken messages: everything is shown in the window
 
@@ -383,8 +385,8 @@ class Control:
     def watch_children(self):
         """Children that stopped by themselves are recorded once (error log)."""
         sc = self.sc
-        if self.st["pipeline"] != "running":
-            return
+        if self.st["pipeline"] != "running" or getattr(self, "_restarting", False):
+            return      # a bridge / MFD restart of our own is not a child that stopped by itself
         for key, name, log in (("bridge", "bridge", "bridge.log"), ("server", "capture server", "capture_server.log")):
             p = sc.STATE.get(key)
             if p is not None and p.poll() is not None and key not in self.child_warned:
@@ -518,7 +520,7 @@ class Control:
     def _start_pipeline(self, override_cert=False):
         sc = self.sc
         self.child_warned = set()
-        self._set(pipeline="starting", pipeline_detail="", steps=[], decision=None, selftest=None)
+        self._set(pipeline="starting", pipeline_detail="", steps=[], decision=None, selftest=None, mfd_needs_bridge=False)
         os.makedirs(sc.LOG_DIR, exist_ok=True)
         blockers = sc.scan(*sc.BLOCKER_NEEDLES)
         if blockers:
@@ -594,6 +596,7 @@ class Control:
             self._step("bridge self-test", "ok" if ok else "warn", msg)
             self._set(selftest="passed" if ok else "skipped")
         sc.start_addons(addons)
+        self._bridge_taps = self._tap_ports()
         if addons:
             self._step("add-ons", "ok", "started: %s" % ", ".join(n for n, _ in addons))
         self._set(pipeline="running", pipeline_detail="")
@@ -916,6 +919,217 @@ class Control:
         self.say("MFD started again (motion, SimHub and the bridge are not touched)")
         return True
 
+    # ---- after an MFD install / update: bring it up without a manual Stop / Start
+    def _tap_ports(self):
+        """{add-on name: tuple of tap ports} of the installed add-ons (what a bridge started now would send to)."""
+        try:
+            import scm_appupdate as AU
+            A = AU.addon_module()
+            return {n: tuple(s.get("taps") or ()) for n, s in (A.installed() if A else {}).items()}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def mfd_after_change(self, what):
+        """After the MFD was installed or updated while motion runs. The bridge reads the tap files only when it
+        starts, so a new MFD (or a changed port) needs a bridge restart; an update on the same port only
+        needs the MFD itself restarted (new program files). The capture server is never restarted (the game
+        does not reconnect to it). With Star Citizen running the bridge restart pauses motion for about two
+        seconds, so it waits for the MFD card's Connect MFD button. -> "restarted", "mfd", "pending" or "none"."""
+        if self.st.get("pipeline") != "running":
+            self.say("the MFD %s starts with motion (Start in the window)" % what)
+            return "none"
+        now = self._tap_ports().get("mfd")
+        had = (getattr(self, "_bridge_taps", None) or {}).get("mfd")
+        if now and now == had:
+            self._mfd_restart_process()
+            return "mfd"
+        if self.sc.scan(self.sc.GAME_EXE):
+            self._set(mfd_needs_bridge=True)
+            self.say("MFD %s: press Connect MFD on the MFD card when it suits you. It restarts the bridge (not the "
+                     "capture server: the game stays connected); motion pauses for about two seconds." % what)
+            return "pending"
+        return "restarted" if self.restart_bridge_for_addons("MFD %s" % what) else "none"
+
+    def _mfd_restart_process(self):
+        """Stop the running MFD process and start it again (new program files; same tap, motion untouched)."""
+        sc = self.sc
+        self._restarting = True
+        try:
+            old = [a for a in sc.STATE.get("addons", []) if a[1] == "mfd"]
+            sc.STATE["addons"] = [a for a in sc.STATE.get("addons", []) if a[1] != "mfd"]
+            for proc, _name, _log in old:
+                if proc.poll() is None:
+                    sc.stop_pid(proc.pid, "add-on mfd")
+                    try:
+                        proc.wait(timeout=5)
+                    except Exception:  # noqa: BLE001
+                        pass
+            cmds = [c for c in sc.addon_commands() if c[0] == "mfd"]
+            if cmds:
+                sc.start_addons(cmds)
+                self.addons_warned.discard("mfd")
+                self.say("MFD started with its new version (motion, SimHub and the bridge are not touched)")
+            return bool(cmds)
+        finally:
+            self._restarting = False
+
+    def restart_bridge_for_addons(self, why="add-ons changed"):
+        """Restart only the bridge and the add-ons, so the bridge reads the tap files again. The capture server
+        keeps running (the game stays connected); motion pauses while the bridge restarts. -> True when done."""
+        sc = self.sc
+        if self.st.get("pipeline") != "running":
+            self.say("bridge not restarted: motion is not running")
+            return False
+        self.say("restarting the bridge for: %s (the capture server keeps running)" % why)
+        self._restarting = True
+        try:
+            return self._restart_bridge(why)
+        finally:
+            self._restarting = False
+
+    def _restart_bridge(self, why):
+        sc = self.sc
+        old, sc.STATE["addons"] = list(sc.STATE.get("addons", [])), []
+        for proc, name, _log in old:
+            if proc.poll() is None:
+                sc.stop_pid(proc.pid, "add-on %s" % name)
+        brg, sc.STATE["bridge"] = sc.STATE.get("bridge"), None
+        if brg is not None and brg.poll() is None:
+            sc.stop_pid(brg.pid, "bridge")
+            try:
+                brg.wait(timeout=5)
+            except Exception:  # noqa: BLE001
+                pass
+        end = time.monotonic() + 5
+        while sc.listening("udp", sc.BRIDGE_PORT_UDP) and time.monotonic() < end:
+            time.sleep(0.2)
+        brg, _ = sc.start_logged(sc.BRIDGE_CMD, "bridge", "bridge.log")
+        sc.STATE["bridge"] = brg
+        end = time.monotonic() + 10
+        while time.monotonic() < end and brg.poll() is None and not sc.listening("udp", sc.BRIDGE_PORT_UDP):
+            time.sleep(0.25)
+        if brg.poll() is not None or not sc.listening("udp", sc.BRIDGE_PORT_UDP):
+            return self._fail("bridge restart failed (log %s)" % os.path.join(sc.LOG_DIR, "bridge.log"),
+                              sc.tail(os.path.join(sc.LOG_DIR, "bridge.log")))
+        addons = sc.addon_commands()
+        sc.start_addons(addons)
+        self._bridge_taps = self._tap_ports()
+        self.addons_warned = set()
+        self._set(mfd_needs_bridge=False)
+        self.say("bridge restarted; add-ons started: %s" % (", ".join(n for n, _ in addons) or "none"))
+        return True
+
+    # ---- MFD install: the Install / Update button of the MFD card
+    def mfd_offer(self):
+        """Where the MFD card's Install button would install from. -> {"source": "clone" | "release" | None,
+        "where": clone folder or owner/repo, "problem": text or None}. A git clone at the mfd_source
+        setting (holding addon.json) wins, the same rule as the update check; else the newest GitHub
+        release of the catalog's repository (addons/catalog.json). Reads files only."""
+        import scm_appupdate as AU
+        src = AU.mfd_source(self.settings)
+        if src and os.path.isdir(os.path.join(src, ".git")) and os.path.isfile(os.path.join(src, "addon.json")):
+            return {"source": "clone", "where": src, "problem": None}
+        A = AU.addon_module()
+        entry = next((c for c in (A.catalog() if A else []) if c.get("name") == "mfd"), None)
+        if entry:
+            return {"source": "release", "where": entry["repo"], "problem": None}
+        return {"source": None, "where": "", "problem": "no MFD source: no clone at %s and no catalog entry "
+                "(addons/catalog.json)" % (src or "(mfd_source = release)")}
+
+    def report_problem(self, text, since=None, kind="error"):
+        """Say text and add it to the error log of this run (the Logs card lists those logs), with the window's
+        lines since line number `since` as the details: the add-on installer's and hooks' output."""
+        self.say(text)
+        EL = getattr(self.sc, "EL", None)
+        if EL is None or EL.current() is None:
+            return
+        trace = ""
+        if since is not None:
+            _n, lines = self.lines_since(since)
+            trace = "\n".join(lines[-120:])
+        try:
+            EL.report(kind, text=text, trace=trace)
+        except Exception:  # noqa: BLE001  logging must never stop the window
+            pass
+
+    def mfd_install_info(self):
+        """For the install dialog: {"url", "release_url", "version", "changes"} of what Install MFD would install
+        (network for a release; the clone's CHANGELOG for a clone). Problems -> "problem"."""
+        import scm_appupdate as AU
+        offer = self.mfd_offer()
+        if offer["source"] == "clone":
+            cl = AU.file_at(offer["where"], "HEAD", "CHANGELOG.md") or ""
+            try:
+                with open(os.path.join(offer["where"], "addon.json"), encoding="utf-8") as f:
+                    ver = json.load(f).get("version")
+            except (OSError, ValueError):
+                ver = None
+            return {"url": AU.web_url(offer["where"]), "release_url": "", "version": ver,
+                    "changes": AU.newest_sections_text(cl) or "(no CHANGELOG.md in the clone)"}
+        if offer["source"] == "release":
+            url = "https://github.com/%s" % offer["where"]
+            try:
+                info = AU.release_info(offer["where"])
+            except Exception as e:  # noqa: BLE001
+                return {"url": url, "release_url": "", "version": None, "changes": "",
+                        "problem": "GitHub not reachable (%s)" % getattr(e, "reason", e)}
+            if not info:
+                return {"url": url, "release_url": "", "version": None, "changes": "", "problem": "no release yet"}
+            return {"url": url, "release_url": info["release_url"], "version": info["version"],
+                    "changes": AU.newest_sections_text(info["changelog"]) or info["notes"] or "(no change notes)"}
+        return {"url": "", "release_url": "", "version": None, "changes": "", "problem": offer["problem"]}
+
+    def mfd_install(self):
+        """Install the MFD add-on (not installed yet) through the bridge's add-on installer: every file is
+        checked against the release's release.json, then the MFD's own installer runs. -> True when done.
+        The window asks before calling this (the add-on's installer is a program that runs as you)."""
+        import scm_appupdate as AU
+        start = self.nline
+        if self.mfd_info().get("installed"):
+            self.say("the MFD add-on is already installed; use Update MFD when a newer release is out")
+            return False
+        offer = self.mfd_offer()
+        if not offer["source"]:
+            self.report_problem("MFD not installed: " + offer["problem"], start)
+            return False
+        A = AU.addon_module()
+        if A is None:
+            self.report_problem("MFD not installed: the add-on installer (setup/common/scm_addons.py) cannot be loaded", start)
+            return False
+        if offer["source"] == "clone":
+            rc, st = AU.git(offer["where"], "status", "--porcelain", "--untracked-files=no")
+            if rc or st.strip():
+                self.report_problem("MFD not installed: the clone %s has local changes that are not committed (its "
+                                    "version number would not describe them); commit or stash them first" % offer["where"], start)
+                return False
+            source = None
+        else:
+            source = "mfd"
+        self.say("installing the MFD add-on from %s ..." % (offer["where"] if offer["source"] == "clone"
+                                                           else "github.com/%s (newest release)" % offer["where"]))
+        try:
+            rc = (AU.install_from_clone(A, offer["where"], self.say) if source is None
+                  else A.cmd_install(source, ["--yes"], say=self.say, want_name="mfd"))
+        except Exception as e:  # noqa: BLE001  a refused or broken package must not stop the window
+            self.report_problem("MFD not installed: %s: %s" % (type(e).__name__, e), start)
+            return False
+        if rc != 0:
+            self.report_problem("MFD not installed (add-on installer exit %d; nothing was kept)" % rc, start)
+            return False
+        info = self.mfd_info()
+        self.say("MFD add-on %s installed. Install the Python modules its plan listed (Pillow is required)."
+                 % info.get("version", "?"))
+        self.mfd_after_change("installed")
+        try:
+            rec = AU.check_mfd(self.settings)
+        except Exception as e:  # noqa: BLE001
+            rec = None
+            self.report_problem("MFD update check after the install failed (%s)" % e, start)
+        if rec is not None and self.st.get("updates") is not None:
+            self._updates = [r for r in self._updates if r.get("id") != "mfd"] + [rec]
+            self._set(updates=[AU.public(r) for r in self._updates])
+        return True
+
     # ---- updates
     def check_updates(self):
         import scm_appupdate as AU
@@ -927,7 +1141,12 @@ class Control:
                 self.say("update available: %s %s -> %s%s" % (r["title"], r["current"], r["available"],
                                                               " (CHANGES PLATFORM MOVEMENT VALUES)" if r["motion"] else ""))
             elif r.get("problem"):
-                self.say("update check %s: %s" % (r["title"], r["problem"]))
+                text = "update check %s: %s" % (r["title"], r["problem"])
+                if text in self._problems_logged:
+                    self.say(text)
+                else:
+                    self._problems_logged.add(text)
+                    self.report_problem(text)
             else:
                 self.say("update check %s: up to date (%s)" % (r["title"], r["current"]))
         return recs
@@ -942,11 +1161,17 @@ class Control:
             if r.get("motion") and not motion_confirmed:
                 self.say("%s: not updated (platform movement values change; YES was not typed)" % r["title"])
                 continue
+            start = self.nline
             ok, text, rs = AU.apply(r, self.say, lambda: bool(self.sc.scan(self.sc.GAME_EXE)),
                                     lambda: self.sc.simhub_state()[0] == "running", platform=self.platform,
                                     install_dir=getattr(self.sc, "INSTALL_DIR", None),
                                     simhub_dir=getattr(self.sc, "SIMHUB_DIR", None))
-            self.say(("updated: " if ok else "NOT updated: ") + text)
+            if ok:
+                self.say("updated: " + text)
+                if r["id"] == "mfd":
+                    self.mfd_after_change("updated")
+            else:
+                self.report_problem("NOT updated: " + text, start)
             if ok and r.get("motion"):
                 self._set(motion_changed=True)
             restart = restart or (ok and rs)

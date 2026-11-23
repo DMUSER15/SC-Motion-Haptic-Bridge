@@ -61,6 +61,20 @@ class UpdateDialog(QtWidgets.QDialog):
             f.setBold(True)
             cb.setFont(f)
             bl.addWidget(cb)
+            row = QtWidgets.QHBoxLayout()
+            for url, label in ((r.get("url"), "Repository"), (r.get("release_url"), "Release page")):
+                if url:
+                    row.addWidget(ui_base.link_label(url, "%s: %s" % (label, url.replace("https://", ""))))
+            if r.get("changes") or r.get("summary"):
+                b = QtWidgets.QPushButton("Show changes…")
+                b.setToolTip("The new CHANGELOG sections of %s %s" % (r["title"], r.get("available") or ""))
+                b.clicked.connect(lambda _=False, rec=r: ui_base.show_text(
+                    self, "Changes: %s %s → %s" % (rec["title"], rec.get("current") or "?", rec.get("available") or "?"),
+                    rec.get("changes") or "\n".join(rec.get("summary") or []), mono=False))
+                row.addStretch(1)
+                row.addWidget(b)
+            if row.count():
+                bl.addLayout(row)
             if r.get("motion"):
                 w = QtWidgets.QLabel("CHANGES PLATFORM MOVEMENT VALUES (%s). You will be asked to type YES." %
                                      ", ".join(r.get("motion_files") or ["release says so"]))
@@ -269,10 +283,11 @@ class MainWindow(QtWidgets.QMainWindow):
         elif then_start:
             self.autostart()
 
-    def show_update_dialog(self, then_start=False):
+    def show_update_dialog(self, then_start=False, only=None):
+        """only: app ids to offer (the MFD card's Update MFD button offers just the MFD)."""
         recs = self.control.snapshot().get("updates") or []
         full = {r["id"]: r for r in self.control._updates}
-        recs = [full.get(r["id"], r) for r in recs]
+        recs = [full.get(r["id"], r) for r in recs if only is None or r["id"] in only]
         if not any(r.get("update") for r in recs):
             if then_start:
                 self.autostart()
@@ -318,6 +333,56 @@ class MainWindow(QtWidgets.QMainWindow):
             self.restart_after = self.control.apply_updates(ids, motion_confirmed=motion_ok)
         if self.control.run_task("update", work):
             self.pending = ("update", False, then_start or was_running)
+
+    def install_mfd(self):
+        """The MFD card's Install MFD button: where it comes from (with a link), what's new, then install."""
+        offer = self.control.mfd_offer()
+        if not offer["source"]:
+            QtWidgets.QMessageBox.information(self, "Install MFD", offer["problem"])
+            return
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        try:
+            info = self.control.mfd_install_info()
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+        if offer["source"] == "clone":
+            where = "your clone %s (setting mfd_source)" % offer["where"]
+        else:
+            where = "the newest release (%s) of github.com/%s" % (info.get("version") or "?", offer["where"])
+        d = QtWidgets.QDialog(self)
+        d.setWindowTitle("Install MFD")
+        lay = QtWidgets.QVBoxLayout(d)
+        t = QtWidgets.QLabel("Install the MFD add-on from %s?\n\n"
+                             "Every file is checked against the release's release.json (sha256) before anything is kept. "
+                             "Then the MFD's own installer runs (as you): it adds its settings, menu entries and its "
+                             "telemetry tap, and lists the Python modules and udev rules it needs. Motion, SimHub and the "
+                             "bridge are not changed. Install only add-ons you trust." % where)
+        t.setTextFormat(QtCore.Qt.PlainText)
+        t.setWordWrap(True)
+        lay.addWidget(t)
+        for url, label in ((info.get("url"), "Repository"), (info.get("release_url"), "Release page")):
+            if url:
+                lay.addWidget(ui_base.link_label(url, "%s: %s" % (label, url.replace("https://", ""))))
+        if info.get("problem"):
+            p = QtWidgets.QLabel("Could not read the release notes: %s" % info["problem"])
+            p.setTextFormat(QtCore.Qt.PlainText)
+            p.setWordWrap(True)
+            lay.addWidget(p)
+        bb = QtWidgets.QDialogButtonBox()
+        if info.get("changes"):
+            b = bb.addButton("What's new…", QtWidgets.QDialogButtonBox.HelpRole)
+            b.clicked.connect(lambda: ui_base.show_text(d, "MFD %s: changes" % (info.get("version") or ""),
+                                                        info["changes"], mono=False))
+        bb.addButton("Install", QtWidgets.QDialogButtonBox.AcceptRole)
+        bb.addButton("Cancel", QtWidgets.QDialogButtonBox.RejectRole)
+        bb.accepted.connect(d.accept)
+        bb.rejected.connect(d.reject)
+        lay.addWidget(bb)
+        d.setMinimumWidth(560)
+        if d.exec() != QtWidgets.QDialog.Accepted:
+            self.control.say("MFD not installed (cancelled)")
+            return
+        self.control.run_task("mfd-install", self.control.mfd_install)
 
     def _pending_done(self):
         kind, prompt, then_start = self.pending

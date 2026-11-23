@@ -16,7 +16,7 @@
   },
   "CHANGELOG.md": {
    "role": "doc",
-   "sha256": "56b792371b77fbe7dde62fe6feed504285d374aca72c970fafa90740d604f86e"
+   "sha256": "436da99fe25e9bb5a8ba32fd3e69868f44a03eab1a3506553a07fd2f8f61179a"
   },
   "LICENSE": {
    "role": "doc",
@@ -24,7 +24,11 @@
   },
   "README.md": {
    "role": "doc",
-   "sha256": "aec32f9f34dbb8826ff71d36cae79047be53e04b4c9145e633cdc1e3e90bbf6c"
+   "sha256": "376edf0e41ec1f1e176dec387f3b6b5cd81bea3498129a818521220f5be3deb5"
+  },
+  "addons/catalog.json": {
+   "role": "doc",
+   "sha256": "93013fb7cf1389bfbef18345ee1bc7dbc0620d11102675119b34f1a2ea0e9084"
   },
   "config/README.md": {
    "role": "doc",
@@ -33,6 +37,10 @@
   "config/effects.json": {
    "role": "user",
    "sha256": "49810800fc585c13a3c3be75ac75d5eb897382c0f93a3c993de7eb87705bbcef"
+  },
+  "config/icons/sc-motion.svg": {
+   "role": "doc",
+   "sha256": "18af920d3fa21825256f1846b88b676ab9502f77792fe695c6a213ecfe88d663"
   },
   "config/simhub/Star Citizen.simdef": {
    "role": "simdef",
@@ -44,7 +52,7 @@
   },
   "docs/CONTROL-WINDOW.md": {
    "role": "doc",
-   "sha256": "8a2c92e82362902cfb4ddb27425d095c26d53418fd3c8199daba26aa6cc81c1c"
+   "sha256": "1819b1e8f24df4662115b901462177a9e595ae516247f824e7d12e5a7f1e43db"
   },
   "docs/INSTALL-LINUX.md": {
    "role": "doc",
@@ -88,7 +96,7 @@
   },
   "gui/panels/p_mfd.py": {
    "role": "setup",
-   "sha256": "7af1e887b95a8dab39b4be4e425d1e862378c027a70d5ac46d0899f41fc35232"
+   "sha256": "8ffd23977c88221a50004d48f7add5dc8a418f83acd8e5da86c738f89d8ecc0d"
   },
   "gui/panels/p_simhub.py": {
    "role": "setup",
@@ -104,23 +112,23 @@
   },
   "gui/sc_control.py": {
    "role": "setup",
-   "sha256": "9efc77e8706198a6e0220b0cb92f1cfd07db4957f5c651ce35758893579c36d1"
+   "sha256": "85d64964a7a6038e3ee0974d6ffbb5a9b3c15075dcc00b543d42a4c0a13c5052"
   },
   "gui/scm_appupdate.py": {
    "role": "setup",
-   "sha256": "6613e440d7eb420ce5d9e506f96bfe6040d8ecfe21e78d1a1939aa369903385b"
+   "sha256": "8c67ada261110ac67a1e6f69c2767d0f0d851e466f0ec0a8691ef59a1ea2b0ee"
   },
   "gui/scm_control.py": {
    "role": "setup",
-   "sha256": "40b0d21dc5c935a0933fa4b652843e9acefcaf1f46617631b750706c2d175538"
+   "sha256": "58d142b7307fc134d33adcac99f620943bbe53cd8048a478aea7bd4a3ff111dd"
   },
   "gui/ui_base.py": {
    "role": "setup",
-   "sha256": "52afa03ba3939ab2d8c5ab717646c2d78affcba50e36f839cc2caa8ec0e103b9"
+   "sha256": "d9d18d2c80fb851b38a3c69aee92cdbcf9af4fd559a02ac52883294d3ed9286f"
   },
   "gui/window.py": {
    "role": "setup",
-   "sha256": "42e1321dceae27fa1565405ae57a9b6347a5958b3015f0e939e8dbb59586e087"
+   "sha256": "b5204b9c8e4efcab7a8231ecfb0c4e1d313cd5c6099f8bd4a970d67a6fa5ea87"
   },
   "plugin/README.md": {
    "role": "plugin",
@@ -216,7 +224,7 @@
   },
   "setup/common/scm_addons.py": {
    "role": "setup",
-   "sha256": "82bcaea40a9f08a57e82a2e6d1ae5514b228b1451c21e87887e8233a4d18c9ea"
+   "sha256": "7cbfde9ff07e6ef3923f5d89f285cc969b8a7c4d2b587353fc94d2073886e44e"
   },
   "setup/common/scm_checks.py": {
    "role": "setup",
@@ -349,6 +357,6 @@
  },
  "motion_values_changed": false,
  "name": "SC-Motion-Haptic-Bridge",
- "tag": "v0.2.1-alpha",
- "version": "0.2.1-alpha"
+ "tag": "v0.2.2-alpha",
+ "version": "0.2.2-alpha"
 }

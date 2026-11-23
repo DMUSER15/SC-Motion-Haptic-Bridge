@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.2-alpha
+
+### Control window: install and update the MFD add-on
+- The **MFD add-on** card shows while the MFD is not installed and has an **Install MFD** button next to **MFD configurator**. It asks first, downloads the newest release of [SC-MFD-Motion-Addon](https://github.com/DMUSER15/SC-MFD-Motion-Addon), checks every file against its `release.json` and runs the MFD's own installer (the same as `addon install mfd`).
+- When the update check finds a newer MFD release the button reads **UPDATE MFD** and opens the update dialog for the MFD only; otherwise **MFD up to date**.
+- `addons/catalog.json` now ships with the release and points `mfd` at the public repository, so `addon install mfd` works on every install.
+- README: link to the MFD repository and its dependencies.
+- The install and update dialogs link to the repository and the release page, and show the new CHANGELOG sections (**What's new…**, **Show changes…**). Versions are shown without the tag's `v`.
+- Failed, refused or partly checked installs and updates are added to the run's error log (Logs card), with the add-on installer's output; add-on hook output now appears in the window too.
+
+- After an MFD install or update with motion running there is no Stop / Start any more: the window restarts the MFD (same port) or the bridge (new MFD; the capture server keeps running, so the game stays connected). With Star Citizen running the bridge restart waits for **Connect MFD** on the MFD card (motion pauses about two seconds).
+
+### Control window: fixes
+- Linux: the window has its logo in the taskbar again. It writes the menu entry `sc-control.desktop` (the taskbar takes the icon from it) when there is none; the logo `config/icons/sc-motion.svg` ships with the release.
+- Updating a git clone on a platform other than Linux or Windows no longer asks for the Windows installer.
+
 ## 0.2.1-alpha
 
 > **Windows: still untested on a real PC.** Tested on Linux with Windows stand-ins only (simulated user folders, stand-in SimHub and RSI Launcher). No motion file changed since 0.2.0-alpha; from 0.1.1-alpha the 0.2.0 motion warning applies.

@@ -121,6 +121,45 @@ def app_icon(repo=REPO):
     return None
 
 
+DESKTOP_NAMES = {"sc-control": "Star Citizen Motion - Control window",
+                 "sc-control-dev": "Star Citizen Motion - Control window (developer)"}
+
+
+def ensure_desktop_entry(desktop_id, dev=False, home=None, python=None, icon=None):
+    """Linux: the taskbar / dock icon of a Wayland window comes from the menu entry named like the window's
+    app id (sc-control.desktop), not from the window itself; without one the window has no logo. Writes
+    ~/.local/share/applications/<id>.desktop when it is missing (never replaces one), with this copy's
+    sc_control.py and logo. -> path written, or None."""
+    if sys.platform.startswith("win") or sys.platform == "darwin":
+        return None
+    home = home or os.path.expanduser("~")
+    base = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    path = os.path.join(base, "applications", desktop_id + ".desktop")
+    if os.path.exists(path):
+        return None
+    icon = icon if icon is not None else app_icon()
+    script = os.path.join(HERE, "sc_control.py")
+
+    def q(s):
+        return '"%s"' % s.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
+    lines = ["[Desktop Entry]", "Type=Application", "Name=%s" % DESKTOP_NAMES.get(desktop_id, desktop_id),
+             "Comment=Start and watch the Star Citizen motion bridge, SimHub and the RSI Launcher",
+             "Exec=%s %s%s" % (q(python or sys.executable), q(script), " --dev" if dev else ""),
+             "Terminal=false", "Categories=Game;Utility;", "StartupWMClass=%s" % desktop_id,
+             "X-SC-Motion=written by sc_control.py; delete it to have it written again"]
+    if icon:
+        lines.insert(4, "Icon=%s" % icon)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        os.replace(tmp, path)
+    except OSError:
+        return None
+    return path
+
+
 def load_profile(dev):
     if not dev or not os.path.isfile(DEV_PROFILE):
         return None
@@ -191,6 +230,9 @@ def main(argv=None):
         app = QtWidgets.QApplication(sys.argv[:1])
         app.setApplicationName("sc-control")
         app.setDesktopFileName("sc-control-dev" if profile else "sc-control")
+        made = ensure_desktop_entry("sc-control-dev" if profile else "sc-control", dev=profile is not None)
+        if made:
+            control.say("menu entry for the window's icon written: %s" % made)
         icon = app_icon()
         if icon:
             app.setWindowIcon(QtGui.QIcon(icon))

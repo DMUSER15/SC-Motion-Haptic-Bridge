@@ -416,8 +416,8 @@ def run_hook(meta, key, folder, say):
         say("  the %s step could not be started (%s)" % (key, e))
         return 126, ""
     lines = (r.stdout + r.stderr).splitlines()
-    for ln in lines[-60:]:
-        print("      " + ln[:300])
+    for ln in lines[-60:]:                # through say: the control window shows and logs it too
+        say("      " + ln[:300])
     result = next((ln.strip() for ln in reversed(lines) if ln.strip().startswith("RESULT ")), "")
     return r.returncode, result
 
